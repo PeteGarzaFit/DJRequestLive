@@ -2,11 +2,11 @@ import React from 'react';
 import { Routes, Route, Link } from 'react-router-dom';
 
 const requests = [
-  { song:'Friends in Low Places', artist:'Garth Brooks', guest:'Sarah', amount:'$10 BOOST' },
-  { song:'No Diggity', artist:'Blackstreet', guest:'Mike', amount:'$5' },
-  { song:'Mr. Brightside', artist:'The Killers', guest:'Alex', amount:'$5' },
-  { song:"Texas Hold 'Em", artist:'Beyoncé', guest:'Jordan', amount:'$10 BOOST' },
-  { song:'Neon Moon', artist:'Brooks & Dunn', guest:'Chris', amount:'$5' },
+  { song:"Choosin' Texas", artist:'Ella Langley', guest:'Sarah', amount:'$10 BOOST' },
+  { song:'Boston', artist:'Stella Lefty', guest:'Mike', amount:'$5' },
+  { song:'Been By Now', artist:'Morgan Wallen', guest:'Alex', amount:'$5' },
+  { song:'Hate That I Made You Love Me', artist:'Ariana Grande', guest:'Jordan', amount:'$10 BOOST' },
+  { song:'Dracula', artist:'Tame Impala & JENNIE', guest:'Chris', amount:'$5' },
 ];
 
 function Logo(){ return <div className="logo"><strong>DJ</strong><span>REQUEST<b>LIVE</b></span></div>; }
