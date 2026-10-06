@@ -7,14 +7,45 @@ const demoRequests = [
   { id: 3, song: 'Neon Moon', artist: 'Brooks & Dunn', guest: 'Mike', amount: 5, status: 'NEW' },
 ];
 
+function ConcertHero() {
+  const bars = Array.from({ length: 28 });
+  return <div className="concert-wrap" aria-label="Animated DJ concert stage">
+    <div className="stage-glow" />
+    <div className="moving-heads" aria-hidden="true">
+      {Array.from({ length: 9 }).map((_, i) => <i key={i} style={{ '--i': i }} />)}
+    </div>
+    <div className="led-wall">
+      <div className="led-logo">DJ</div>
+      <div className="led-title">REQUEST <b>LIVE</b></div>
+      <div className="led-wave" />
+    </div>
+    <div className="speaker-stack left" aria-hidden="true">
+      <div className="speaker small" /><div className="speaker medium" /><div className="speaker sub" />
+    </div>
+    <div className="speaker-stack right" aria-hidden="true">
+      <div className="speaker small" /><div className="speaker medium" /><div className="speaker sub" />
+    </div>
+    <div className="dj-booth">
+      <div className="dj-silhouette"><span /></div>
+      <div className="analyzer">{bars.map((_, i) => <i key={i} style={{ '--i': i }} />)}</div>
+    </div>
+    <div className="crowd" aria-hidden="true">
+      {Array.from({ length: 18 }).map((_, i) => <i key={i} style={{ '--i': i }} />)}
+    </div>
+  </div>;
+}
+
 function Home() {
   return <main className="hero">
-    <div className="eyebrow">DJ AUDIENCE ENGAGEMENT</div>
-    <h1>Your crowd.<br/><span>Your requests.</span><br/>Your set.</h1>
-    <p>DJ Request Live turns a simple QR code into your DJ booth's digital front door.</p>
-    <div className="actions">
-      <Link className="button primary" to="/dashboard">Open DJ Dashboard</Link>
-      <Link className="button secondary" to="/pete-garza">View Guest Experience</Link>
+    <ConcertHero />
+    <div className="hero-copy">
+      <div className="eyebrow">DJ AUDIENCE ENGAGEMENT</div>
+      <h1>Your crowd.<br/><span>Your requests.</span><br/>Your set.</h1>
+      <p>DJ Request Live turns a simple QR code into your DJ booth's digital front door.</p>
+      <div className="actions">
+        <Link className="button primary" to="/dashboard">Open DJ Dashboard</Link>
+        <Link className="button secondary" to="/pete-garza">View Guest Experience</Link>
+      </div>
     </div>
   </main>;
 }
