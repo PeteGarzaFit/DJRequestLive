@@ -23,7 +23,7 @@ function ProductMockup(){
       </div>
     </div>
     <div className="phone">
-      <div className="phone-screen"><Logo/><div className="phone-title">Scan to<br/>Request a Song</div><div className="qr">▦</div><button>REQUEST A SONG</button></div>
+      <div className="phone-screen"><Logo/><div className="phone-title">Scan to<br/>Request a Song</div><img className="qr" src="/djrequestlive-qr.svg" alt="Scan to open DJRequestLive.com" /><button>REQUEST A SONG</button></div>
     </div>
   </div>;
 }
