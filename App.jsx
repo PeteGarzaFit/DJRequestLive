@@ -10,10 +10,6 @@ const demoRequests = [
 function ConcertHero() {
   return <div className="concert-wrap" aria-label="DJ Request Live concert stage">
     <img className="concert-art" src="/djrequest-hero.jpg" alt="DJ Request Live concert stage with DJ and speaker stacks" />
-    <div className="concert-vignette" />
-    <div className="beam beam-left" aria-hidden="true" />
-    <div className="beam beam-right" aria-hidden="true" />
-    <div className="bass-pulse" aria-hidden="true" />
   </div>;
 }
 
