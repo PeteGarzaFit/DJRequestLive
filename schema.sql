@@ -1,18 +1,48 @@
-CREATE DATABASE IF NOT EXISTS djrequestlive;
-USE djrequestlive;
+-- DJ Request Live: MySQL schema.
+-- The server runs this automatically on start (every statement is CREATE TABLE IF NOT EXISTS),
+-- so you only need to create an empty MySQL database in hPanel and set the DB_* variables.
+-- You can also import this file in phpMyAdmin.
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   dj_name VARCHAR(120) NOT NULL,
-  slug VARCHAR(120) NOT NULL UNIQUE,
-  bio TEXT NULL,
-  logo_url VARCHAR(500) NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+  slug VARCHAR(40) NOT NULL UNIQUE,
+  tagline VARCHAR(200) NOT NULL DEFAULT '',
+  genres VARCHAR(160) NOT NULL DEFAULT '',
+  min_tip DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+  pay_json TEXT NOT NULL,
+  design_json TEXT NOT NULL,
+  logo_media BIGINT UNSIGNED NULL,
+  wall_media BIGINT UNSIGNED NULL,
+  photos_json TEXT NOT NULL,
+  is_live TINYINT(1) NOT NULL DEFAULT 1,
+  created_at BIGINT NOT NULL
+) CHARACTER SET utf8mb4;
 
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS sessions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at BIGINT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_sessions_user (user_id)
+) CHARACTER SET utf8mb4;
+
+-- Uploaded logo, wallpaper and photos live in the database so they survive redeploys.
+CREATE TABLE IF NOT EXISTS media (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  mime VARCHAR(40) NOT NULL,
+  data MEDIUMBLOB NOT NULL,
+  created_at BIGINT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_media_user (user_id)
+) CHARACTER SET utf8mb4;
+
+-- Reserved for multi-event support later.
+CREATE TABLE IF NOT EXISTS events (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,
   name VARCHAR(180) NOT NULL,
@@ -22,24 +52,29 @@ CREATE TABLE events (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_events_user (user_id)
-);
+) CHARACTER SET utf8mb4;
 
-CREATE TABLE requests (
+CREATE TABLE IF NOT EXISTS requests (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  event_id BIGINT UNSIGNED NOT NULL,
-  guest_name VARCHAR(120) NULL,
-  song_title VARCHAR(255) NOT NULL,
-  artist VARCHAR(255) NULL,
-  message VARCHAR(500) NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  event_id BIGINT UNSIGNED NULL,
+  guest_name VARCHAR(60) NOT NULL DEFAULT '',
+  song_title VARCHAR(120) NOT NULL,
+  artist VARCHAR(120) NOT NULL DEFAULT '',
+  message VARCHAR(200) NOT NULL DEFAULT '',
   status ENUM('new','approved','declined','played') NOT NULL DEFAULT 'new',
-  amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  played_at TIMESTAMP NULL,
-  FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-  INDEX idx_requests_event_status (event_id,status)
-);
+  amount DECIMAL(8,2) NOT NULL DEFAULT 0.00,
+  method VARCHAR(10) NOT NULL DEFAULT '',
+  paid TINYINT(1) NOT NULL DEFAULT 0,
+  created_at BIGINT NOT NULL,
+  played_at BIGINT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL,
+  INDEX idx_requests_user_created (user_id, created_at)
+) CHARACTER SET utf8mb4;
 
-CREATE TABLE payments (
+-- Reserved for Stripe boosts and subscriptions later.
+CREATE TABLE IF NOT EXISTS payments (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   request_id BIGINT UNSIGNED NULL,
   user_id BIGINT UNSIGNED NOT NULL,
@@ -51,13 +86,13 @@ CREATE TABLE payments (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE SET NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+) CHARACTER SET utf8mb4;
 
-CREATE TABLE votes (
+CREATE TABLE IF NOT EXISTS votes (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   request_id BIGINT UNSIGNED NOT NULL,
   guest_identifier VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY unique_vote (request_id, guest_identifier),
   FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE
-);
+) CHARACTER SET utf8mb4;

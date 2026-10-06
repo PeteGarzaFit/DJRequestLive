@@ -1,0 +1,292 @@
+import { hashPassword, verifyPassword, fakeVerify, newToken, tokenHash, parseCookies, limited } from './security.js';
+
+const RESERVED = ['studio', 'login', 'signup', 'dashboard', 'api', 'admin', 'assets', 'media', 'privacy', 'terms', 'help', 'index', 'app', 'www'];
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{2,29}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PAY_KEYS = ['cash', 'venmo', 'paypal', 'zelle', 'apple'];
+const BGS = ['midnight', 'navy', 'plum', 'black'];
+const FONTS = ['bold', 'classic', 'street', 'clean'];
+const METHODS = ['', 'cash', 'venmo', 'paypal', 'zelle', 'apple'];
+const STATUSES = ['new', 'approved', 'declined', 'played'];
+const SESSION_DAYS = 30;
+const MAX_JSON = 100 * 1024;
+const MAX_IMAGE = 2.5 * 1024 * 1024;
+const HEX = /^#[0-9a-f]{6}$/i;
+
+class HttpError extends Error { constructor(status, code) { super(code); this.status = status; this.code = code; } }
+const bad = (code, status = 400) => new HttpError(status, code);
+
+function send(res, status, body, headers = {}) {
+  const buf = Buffer.from(JSON.stringify(body));
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Length': buf.length, ...headers });
+  res.end(buf);
+}
+async function readBody(req, limit) {
+  const chunks = [];
+  let size = 0;
+  for await (const c of req) {
+    size += c.length;
+    if (size > limit) throw bad('too_large', 413);
+    chunks.push(c);
+  }
+  return Buffer.concat(chunks);
+}
+async function readJson(req) {
+  if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw bad('json_required', 415);
+  const raw = await readBody(req, MAX_JSON);
+  try { const v = JSON.parse(raw.toString('utf8') || '{}'); if (v && typeof v === 'object') return v; } catch {}
+  throw bad('bad_json');
+}
+const clientIp = (req) => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+const isHttps = (req) => req.socket.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+const str = (v, max, { min = 0, trim = true } = {}) => {
+  let s = typeof v === 'string' ? v : '';
+  if (trim) s = s.trim();
+  if (s.length < min || s.length > max) throw bad('invalid_field');
+  return s;
+};
+const json = (s, fallback) => { try { const v = JSON.parse(s); return v ?? fallback; } catch { return fallback; } };
+const num = (v) => Number(v) || 0;
+
+export function createApp(db) {
+  const mediaUrl = (id) => (id ? `/media/${id}` : null);
+
+  const privateProfile = (u) => ({
+    id: u.id, email: u.email, slug: u.slug, name: u.dj_name, tagline: u.tagline, genres: u.genres, min_tip: num(u.min_tip),
+    pay: json(u.pay_json, {}), design: json(u.design_json, {}), logo: mediaUrl(u.logo_media), wall: mediaUrl(u.wall_media),
+    photos: json(u.photos_json, []).map(mediaUrl), is_live: !!u.is_live,
+  });
+  const publicProfile = (u) => { const p = privateProfile(u); delete p.email; delete p.id; return p; };
+
+  async function userFromRequest(req) {
+    const t = parseCookies(req.headers.cookie).rl_session;
+    if (!t) return null;
+    return db.get(
+      'SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?',
+      [tokenHash(t), Date.now()],
+    );
+  }
+  const requireUser = async (req) => { const u = await userFromRequest(req); if (!u) throw bad('not_signed_in', 401); return u; };
+
+  async function startSession(req, res, userId, status, body) {
+    const token = newToken();
+    const exp = Date.now() + SESSION_DAYS * 86400000;
+    await db.run('INSERT INTO sessions (user_id, token_hash, expires_at) VALUES (?,?,?)', [userId, tokenHash(token), exp]);
+    await db.run('DELETE FROM sessions WHERE expires_at < ?', [Date.now()]);
+    const cookie = `rl_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${isHttps(req) ? '; Secure' : ''}`;
+    send(res, status, body, { 'Set-Cookie': cookie });
+  }
+
+  const dupe = (e) => /ER_DUP_ENTRY|UNIQUE constraint failed/i.test(String(e && (e.code || e.message)));
+
+  async function removeMedia(userId, id) {
+    if (id) await db.run('DELETE FROM media WHERE id = ? AND user_id = ?', [id, userId]);
+  }
+  function sniff(buf) {
+    if (buf.length > 12 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+    if (buf.length > 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+    if (buf.length > 12 && buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP') return 'image/webp';
+    return null;
+  }
+  const sameOrigin = (req) => {
+    const o = req.headers.origin;
+    if (!o) return true;
+    try { return new URL(o).host === (req.headers['x-forwarded-host'] || req.headers.host); } catch { return false; }
+  };
+
+  // Returns true when it handled the request.
+  return async function handle(req, res, url) {
+    const path = url.pathname;
+    const method = req.method;
+
+    if (path.startsWith('/media/') && method === 'GET') {
+      const id = Number(path.slice(7));
+      const m = Number.isInteger(id) ? await db.get('SELECT mime, data FROM media WHERE id = ?', [id]) : null;
+      if (!m) { res.writeHead(404); res.end(); return true; }
+      const data = Buffer.from(m.data);
+      res.writeHead(200, { 'Content-Type': m.mime, 'Content-Length': data.length, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+      res.end(data);
+      return true;
+    }
+    if (!path.startsWith('/api/')) return false;
+
+    try {
+      if (method !== 'GET' && method !== 'HEAD' && !sameOrigin(req)) throw bad('bad_origin', 403);
+      const ip = clientIp(req);
+      let m;
+
+      if (path === '/api/health' && method === 'GET') {
+        await db.get('SELECT 1 AS ok');
+        return send(res, 200, { ok: true, service: 'DJ Request Live API', database: db.driver }), true;
+      }
+
+      if (path === '/api/signup' && method === 'POST') {
+        if (limited(`signup:${ip}`, 10, 3600000)) throw bad('rate_limited', 429);
+        const b = await readJson(req);
+        const name = str(b.name, 60, { min: 1 });
+        const email = str(b.email, 255, { min: 3 }).toLowerCase();
+        const password = str(b.password, 200, { min: 8, trim: false });
+        const slug = str(b.slug, 30).toLowerCase();
+        if (!EMAIL_RE.test(email)) throw bad('invalid_email');
+        if (!SLUG_RE.test(slug) || RESERVED.includes(slug)) throw bad('invalid_slug');
+        if (await db.get('SELECT id FROM users WHERE email = ?', [email])) throw bad('email_taken', 409);
+        if (await db.get('SELECT id FROM users WHERE slug = ?', [slug])) throw bad('slug_taken', 409);
+        let r;
+        try {
+          r = await db.run(
+            'INSERT INTO users (email, password_hash, dj_name, slug, pay_json, design_json, photos_json, is_live, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+            [email, await hashPassword(password), name, slug, '{}', '{}', '[]', 1, Date.now()],
+          );
+        } catch (e) { if (dupe(e)) throw bad('slug_or_email_taken', 409); throw e; }
+        const u = await db.get('SELECT * FROM users WHERE id = ?', [r.insertId]);
+        return await startSession(req, res, u.id, 201, { user: privateProfile(u) }), true;
+      }
+
+      if (path === '/api/login' && method === 'POST') {
+        if (limited(`login:${ip}`, 15, 900000)) throw bad('rate_limited', 429);
+        const b = await readJson(req);
+        const email = str(b.email, 255).toLowerCase();
+        const u = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+        const ok = u ? await verifyPassword(String(b.password || ''), u.password_hash) : (await fakeVerify(), false);
+        if (!ok) throw bad('wrong_login', 401);
+        return await startSession(req, res, u.id, 200, { user: privateProfile(u) }), true;
+      }
+
+      if (path === '/api/logout' && method === 'POST') {
+        const t = parseCookies(req.headers.cookie).rl_session;
+        if (t) await db.run('DELETE FROM sessions WHERE token_hash = ?', [tokenHash(t)]);
+        return send(res, 200, { ok: true }, { 'Set-Cookie': 'rl_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' }), true;
+      }
+
+      if (path === '/api/me' && method === 'GET') {
+        const u = await userFromRequest(req);
+        return send(res, u ? 200 : 401, u ? { user: privateProfile(u) } : { error: 'not_signed_in' }), true;
+      }
+
+      if (path === '/api/me' && method === 'PUT') {
+        const u = await requireUser(req);
+        const b = await readJson(req);
+        const pay = {};
+        for (const k of PAY_KEYS) { const v = b.pay && b.pay[k]; if (typeof v === 'string' && v.trim()) pay[k] = str(v, 80); }
+        const d = b.design && typeof b.design === 'object' ? b.design : {};
+        const design = {};
+        if (HEX.test(d.a || '')) design.a = d.a;
+        if (HEX.test(d.gl || '')) design.gl = d.gl;
+        if (BGS.includes(d.bg)) design.bg = d.bg;
+        if (FONTS.includes(d.f)) design.f = d.f;
+        design.v = d.v === 0 || d.v === false ? 0 : 1;
+        if (typeof d.lb === 'string' && d.lb.trim()) design.lb = str(d.lb, 3);
+        if (typeof d.live === 'string' && d.live.trim()) design.live = str(d.live, 40);
+        if (typeof d.ig === 'string' && d.ig.trim()) { design.ig = str(d.ig, 40).replace(/^@/, ''); if (!/^[A-Za-z0-9._]+$/.test(design.ig)) throw bad('invalid_field'); }
+        if (typeof d.tips === 'string' && d.tips.trim()) { design.tips = str(d.tips, 30); if (!/^[\d.,\s]+$/.test(design.tips)) throw bad('invalid_field'); }
+        const minTip = Math.round(num(b.min_tip) * 100) / 100;
+        if (minTip < 0 || minTip > 10000) throw bad('invalid_field');
+        await db.run(
+          'UPDATE users SET dj_name = ?, tagline = ?, genres = ?, min_tip = ?, pay_json = ?, design_json = ?, is_live = ? WHERE id = ?',
+          [str(b.name, 60, { min: 1 }), str(b.tagline ?? '', 200), str(b.genres ?? '', 160), minTip, JSON.stringify(pay), JSON.stringify(design), b.is_live === false || b.is_live === 0 ? 0 : 1, u.id],
+        );
+        return send(res, 200, { user: privateProfile(await db.get('SELECT * FROM users WHERE id = ?', [u.id])) }), true;
+      }
+
+      if (path === '/api/me/media' && (method === 'POST' || method === 'DELETE')) {
+        const u = await requireUser(req);
+        const kind = url.searchParams.get('kind');
+        const idx = Number(url.searchParams.get('index') || 0);
+        if (!['logo', 'wall', 'photo'].includes(kind) || !Number.isInteger(idx) || idx < 0 || idx > 2) throw bad('invalid_field');
+        let newId = null;
+        if (method === 'POST') {
+          const buf = await readBody(req, MAX_IMAGE);
+          const mime = sniff(buf);
+          if (!mime) throw bad('unsupported_image', 415);
+          if ((await db.get('SELECT COUNT(*) AS n FROM media WHERE user_id = ?', [u.id])).n >= 30) throw bad('too_many_images', 429);
+          newId = (await db.run('INSERT INTO media (user_id, mime, data, created_at) VALUES (?,?,?,?)', [u.id, mime, buf, Date.now()])).insertId;
+        }
+        if (kind === 'photo') {
+          const photos = json(u.photos_json, []);
+          let old = null;
+          if (method === 'POST') { old = photos[idx] || null; if (idx < photos.length) photos[idx] = newId; else photos.push(newId); }
+          else { [old] = photos.splice(idx, 1); }
+          await db.run('UPDATE users SET photos_json = ? WHERE id = ?', [JSON.stringify(photos.slice(0, 3)), u.id]);
+          await removeMedia(u.id, old);
+        } else {
+          const col = kind === 'logo' ? 'logo_media' : 'wall_media';
+          const old = u[col];
+          await db.run(`UPDATE users SET ${col} = ? WHERE id = ?`, [newId, u.id]);
+          await removeMedia(u.id, old);
+        }
+        return send(res, 200, { user: privateProfile(await db.get('SELECT * FROM users WHERE id = ?', [u.id])) }), true;
+      }
+
+      if (path === '/api/slug' && method === 'GET') {
+        const s = String(url.searchParams.get('slug') || '').toLowerCase();
+        const ok = SLUG_RE.test(s) && !RESERVED.includes(s) && !(await db.get('SELECT id FROM users WHERE slug = ?', [s]));
+        return send(res, 200, { available: ok }), true;
+      }
+
+      if ((m = path.match(/^\/api\/dj\/([a-z0-9-]{3,30})$/)) && method === 'GET') {
+        const u = await db.get('SELECT * FROM users WHERE slug = ?', [m[1]]);
+        if (!u) throw bad('not_found', 404);
+        return send(res, 200, { dj: publicProfile(u) }, { 'Cache-Control': 'no-cache' }), true;
+      }
+
+      if ((m = path.match(/^\/api\/dj\/([a-z0-9-]{3,30})\/requests$/)) && method === 'POST') {
+        if (limited(`req:${ip}`, 20, 600000)) throw bad('rate_limited', 429);
+        const u = await db.get('SELECT * FROM users WHERE slug = ?', [m[1]]);
+        if (!u) throw bad('not_found', 404);
+        const b = await readJson(req);
+        if (typeof b.website === 'string' && b.website) return send(res, 201, { ok: true }), true; // spam trap
+        if (!u.is_live) throw bad('paused', 403);
+        const song = str(b.song, 120, { min: 1 });
+        const artist = str(b.artist ?? '', 120);
+        const guest = str(b.from ?? '', 60);
+        const note = str(b.note ?? '', 200);
+        const tip = Math.round(num(b.tip) * 100) / 100;
+        const method = METHODS.includes(b.method) ? b.method : '';
+        if (!(tip > 0 && tip <= 10000)) throw bad('invalid_tip');
+        if (tip < num(u.min_tip)) throw bad('below_minimum');
+        await db.run(
+          'INSERT INTO requests (user_id, guest_name, song_title, artist, message, amount, method, created_at) VALUES (?,?,?,?,?,?,?,?)',
+          [u.id, guest, song, artist, note, tip, method, Date.now()],
+        );
+        return send(res, 201, { ok: true }), true;
+      }
+
+      if (path === '/api/me/requests' && method === 'GET') {
+        const u = await requireUser(req);
+        const rows = await db.all('SELECT * FROM requests WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 300', [u.id]);
+        return send(res, 200, { requests: rows.map(requestOut) }), true;
+      }
+
+      if ((m = path.match(/^\/api\/me\/requests\/(\d+)$/)) && (method === 'PATCH' || method === 'DELETE')) {
+        const u = await requireUser(req);
+        const id = Number(m[1]);
+        const row = await db.get('SELECT * FROM requests WHERE id = ? AND user_id = ?', [id, u.id]);
+        if (!row) throw bad('not_found', 404);
+        if (method === 'DELETE') {
+          await db.run('DELETE FROM requests WHERE id = ? AND user_id = ?', [id, u.id]);
+          return send(res, 200, { ok: true }), true;
+        }
+        const b = await readJson(req);
+        const status = b.status === undefined ? row.status : b.status;
+        if (!STATUSES.includes(status)) throw bad('invalid_field');
+        const paid = b.paid === undefined ? !!row.paid : !!b.paid;
+        await db.run('UPDATE requests SET status = ?, paid = ?, played_at = ? WHERE id = ? AND user_id = ?',
+          [status, paid ? 1 : 0, status === 'played' ? (row.played_at || Date.now()) : null, id, u.id]);
+        return send(res, 200, { request: requestOut(await db.get('SELECT * FROM requests WHERE id = ?', [id])) }), true;
+      }
+
+      throw bad('not_found', 404);
+    } catch (e) {
+      if (e instanceof HttpError) return send(res, e.status, { error: e.code }), true;
+      console.error('API error:', e);
+      return send(res, 500, { error: 'server_error' }), true;
+    }
+  };
+}
+
+function requestOut(r) {
+  return {
+    id: r.id, song: r.song_title, artist: r.artist, from: r.guest_name, note: r.message, tip: Number(r.amount),
+    method: r.method, status: r.status, paid: !!r.paid, created_at: Number(r.created_at),
+  };
+}

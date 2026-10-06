@@ -1,38 +1,67 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import mysql from 'mysql2/promise';
+import http from 'node:http';
+import { readFile, stat } from 'node:fs/promises';
+import { join, extname, normalize, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createDb } from './server/db.js';
+import { createApp } from './server/app.js';
 
-dotenv.config();
-const app = express();
-app.use(cors());
-app.use(express.json());
+// Local development: load variables from a .env file if there is one (Hostinger sets them in hPanel).
+try { process.loadEnvFile(); } catch { /* no .env file */ }
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10
-});
+const root = fileURLToPath(new URL('.', import.meta.url));
+const dist = resolve(root, 'dist');
+const TYPES = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+  '.ico': 'image/x-icon', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2',
+};
+const SECURITY = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
+};
 
-app.get('/api/health', async (_req, res) => {
+async function serveStatic(req, res, pathname) {
+  let file = resolve(dist, '.' + normalize('/' + decodeURIComponent(pathname)));
+  if (!file.startsWith(dist)) { res.writeHead(403); return res.end(); }
+  let info = await stat(file).catch(() => null);
+  if (!info || info.isDirectory()) { file = join(dist, 'index.html'); info = await stat(file).catch(() => null); }
+  if (!info) {
+    res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return res.end('The site has not been built yet. Run "npm run build" first.');
+  }
+  const ext = extname(file);
+  const hashed = file.includes(`${join(dist, 'assets')}`);
+  const data = await readFile(file);
+  res.writeHead(200, {
+    ...SECURITY,
+    'Content-Type': TYPES[ext] || 'application/octet-stream',
+    'Content-Length': data.length,
+    'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
+  });
+  res.end(req.method === 'HEAD' ? undefined : data);
+}
+
+const db = await createDb();
+const handle = createApp(db);
+
+const server = http.createServer(async (req, res) => {
   try {
-    await pool.query('SELECT 1');
-    res.json({ ok: true, service: 'DJ Request Live API', database: 'connected' });
-  } catch (error) {
-    res.status(503).json({ ok: false, database: 'unavailable' });
+    const url = new URL(req.url, 'http://localhost');
+    for (const [k, v] of Object.entries(SECURITY)) res.setHeader(k, v);
+    if (await handle(req, res, url)) return;
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
+    await serveStatic(req, res, url.pathname);
+  } catch (e) {
+    console.error(e);
+    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end('Server error');
   }
 });
 
-app.get('/api/events/:eventId/requests', async (req, res) => {
-  const [rows] = await pool.query(
-    'SELECT id, guest_name, song_title, artist, message, status, amount, created_at FROM requests WHERE event_id = ? ORDER BY created_at DESC',
-    [req.params.eventId]
-  );
-  res.json(rows);
-});
-
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`DJ Request Live API listening on ${port}`));
+const port = Number(process.env.PORT || 3000);
+server.listen(port, () => console.log(`DJ Request Live listening on ${port} (${db.driver})`));
+export { server };
