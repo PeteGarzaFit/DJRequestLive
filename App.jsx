@@ -7,23 +7,28 @@ const demoRequests = [
   { id: 3, song: 'Neon Moon', artist: 'Brooks & Dunn', guest: 'Mike', amount: 5 },
 ];
 
-function ConcertHero() {
-  return <div className="concert-wrap" aria-label="DJ Request Live concert stage">
-    <img className="concert-art" src="/djrequest-hero.jpg" alt="DJ Request Live concert stage with DJ and speaker stacks" />
+function ProductPreview() {
+  return <div className="product-preview" aria-label="DJ Request Live product preview">
+    <div className="preview-top"><span>DJ REQUEST LIVE</span><span className="preview-live">● LIVE</span></div>
+    <div className="preview-title">Live Requests</div>
+    <div className="preview-row"><div><b>No Diggity</b><span>Blackstreet · Sarah</span></div><em>$10 BOOST</em><button>✓</button></div>
+    <div className="preview-row"><div><b>Friends in Low Places</b><span>Garth Brooks · Mike</span></div><em>$5 BOOST</em><button>✓</button></div>
+    <div className="preview-row"><div><b>Mr. Brightside</b><span>The Killers · Alex</span></div><em className="free">FREE</em><button>✓</button></div>
   </div>;
 }
 
 function Home() {
   return <main className="hero">
-    <ConcertHero />
     <div className="hero-copy">
+      <div className="brand-mark">DJ REQUEST <span>LIVE</span></div>
       <div className="eyebrow">DJ AUDIENCE ENGAGEMENT</div>
       <h1>Your crowd.<br/><span>Your requests.</span><br/>Your set.</h1>
       <p>DJ Request Live turns a simple QR code into your DJ booth's digital front door.</p>
       <div className="actions">
-        <Link className="button primary" to="/dashboard">Open DJ Dashboard</Link>
-        <Link className="button secondary" to="/pete-garza">View Guest Experience</Link>
+        <Link className="button primary" to="/dashboard">Get Started Free</Link>
+        <Link className="button secondary" to="/pete-garza">See Demo</Link>
       </div>
+      <ProductPreview />
     </div>
   </main>;
 }
