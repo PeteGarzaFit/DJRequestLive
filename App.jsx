@@ -2,36 +2,18 @@ import React from 'react';
 import { Routes, Route, Link } from 'react-router-dom';
 
 const demoRequests = [
-  { id: 1, song: 'Friends in Low Places', artist: 'Garth Brooks', guest: 'Pete', amount: 10, status: 'BOOSTED' },
-  { id: 2, song: 'Mr. Brightside', artist: 'The Killers', guest: 'Sarah', amount: 0, status: 'NEW' },
-  { id: 3, song: 'Neon Moon', artist: 'Brooks & Dunn', guest: 'Mike', amount: 5, status: 'NEW' },
+  { id: 1, song: 'Friends in Low Places', artist: 'Garth Brooks', guest: 'Pete', amount: 10 },
+  { id: 2, song: 'Mr. Brightside', artist: 'The Killers', guest: 'Sarah', amount: 0 },
+  { id: 3, song: 'Neon Moon', artist: 'Brooks & Dunn', guest: 'Mike', amount: 5 },
 ];
 
 function ConcertHero() {
-  const bars = Array.from({ length: 28 });
-  return <div className="concert-wrap" aria-label="Animated DJ concert stage">
-    <div className="stage-glow" />
-    <div className="moving-heads" aria-hidden="true">
-      {Array.from({ length: 9 }).map((_, i) => <i key={i} style={{ '--i': i }} />)}
-    </div>
-    <div className="led-wall">
-      <div className="led-logo">DJ</div>
-      <div className="led-title">REQUEST <b>LIVE</b></div>
-      <div className="led-wave" />
-    </div>
-    <div className="speaker-stack left" aria-hidden="true">
-      <div className="speaker small" /><div className="speaker medium" /><div className="speaker sub" />
-    </div>
-    <div className="speaker-stack right" aria-hidden="true">
-      <div className="speaker small" /><div className="speaker medium" /><div className="speaker sub" />
-    </div>
-    <div className="dj-booth">
-      <div className="dj-silhouette"><span /></div>
-      <div className="analyzer">{bars.map((_, i) => <i key={i} style={{ '--i': i }} />)}</div>
-    </div>
-    <div className="crowd" aria-hidden="true">
-      {Array.from({ length: 18 }).map((_, i) => <i key={i} style={{ '--i': i }} />)}
-    </div>
+  return <div className="concert-wrap" aria-label="DJ Request Live concert stage">
+    <img className="concert-art" src="/djrequest-hero.jpg" alt="DJ Request Live concert stage with DJ and speaker stacks" />
+    <div className="concert-vignette" />
+    <div className="beam beam-left" aria-hidden="true" />
+    <div className="beam beam-right" aria-hidden="true" />
+    <div className="bass-pulse" aria-hidden="true" />
   </div>;
 }
 
@@ -71,7 +53,7 @@ function Dashboard() {
   </main>;
 }
 
-function Guest({ slug }) {
+function Guest() {
   return <main className="guest">
     <div className="guest-card">
       <div className="avatar">DG</div>
