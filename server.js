@@ -58,8 +58,23 @@ async function main() {
       if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
       await serveStatic(req, res, url.pathname);
     } catch (e) {
-      console.error(e);
-      if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
+      console.error('HTTP request error:', { method: req.method, url: req.url, message: e?.message, stack: e?.stack });
+      if (!res.headersSent) {
+        const isPlanner = String(req.url || '').split('?')[0] === '/api/ai/event-plan';
+        if (isPlanner) {
+          const body = JSON.stringify({
+            error: 'planner_unavailable',
+            message: 'The planner hit an unexpected server condition. Please retry.'
+          });
+          res.writeHead(503, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'Content-Length': Buffer.byteLength(body),
+          });
+          return res.end(body);
+        }
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+      }
       res.end('Server error');
     }
   });
