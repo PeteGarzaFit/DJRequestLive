@@ -267,9 +267,13 @@ function DesignTab({ dj, edit, saved, mergeMedia, goTab }) {
           <label className="switch-row"><input id="d-show-name" type="checkbox" checked={d.showName !== false} onChange={(e) => setD({ showName: e.target.checked })} /><span>Show the DJ name below the logo</span></label>
           <span className="hint">Turn this off if your logo already includes your DJ name.</span>
         </div>
-        <div className="field"><label htmlFor="d-ls">Logo size</label>
+        <div className="field"><label htmlFor="d-ls">Guest page logo size</label>
           <div className="logo-size-control"><input type="range" id="d-ls" min="140" max="420" step="10" value={Math.max(140, Math.min(420, Number(d.ls) || 220))} onChange={(e) => setD({ ls: Number(e.target.value) })} /><output>{Math.max(140, Math.min(420, Number(d.ls) || 220))} px</output></div>
-          <span className="hint">Resize your logo on the guest page. Use a transparent PNG for the cleanest result.</span>
+          <span className="hint">Controls the logo size on your live DJ page.</span>
+        </div>
+        <div className="field"><label htmlFor="d-pls">QR poster logo size</label>
+          <div className="logo-size-control"><input type="range" id="d-pls" min="400" max="900" step="20" value={Math.max(400, Math.min(900, Number(d.pls) || 760))} onChange={(e) => setD({ pls: Number(e.target.value) })} /><output>{Math.max(400, Math.min(900, Number(d.pls) || 760))} px</output></div>
+          <span className="hint">Make your logo smaller or let it fill more of the poster.</span>
         </div>
         <div className="field"><label>Background</label>
           <div className="opt4">{Object.entries(BGS).map(([k, b]) => <button key={k} className="ob" aria-pressed={(d.bg || 'midnight') === k} onClick={() => setD({ bg: k })}><span className="dot" style={{ background: b.ink }} />{b.n}</button>)}</div></div>
