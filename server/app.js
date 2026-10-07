@@ -269,6 +269,37 @@ export function createApp(db) {
         return send(res, 200, { playlists: items.map(p => ({ id: p.id, name: p.name, public: p.public, collaborative: p.collaborative, tracks: p.items?.total ?? p.tracks?.total ?? 0, url: p.external_urls?.spotify || null })) }), true;
       }
 
+      if (path === '/api/spotify/add-to-playlist' && method === 'POST') {
+        const u = await requireUser(req);
+        const access = await spotifyToken(db, u);
+        const b = await readJson(req);
+        const playlistId = str(b.playlist_id ?? '', 200, { min: 1 });
+        const songs = Array.isArray(b.songs) ? b.songs.slice(0, 100) : [];
+        if (!songs.length) throw bad('playlist_empty');
+        const uris = [], missing = [];
+        for (const song of songs) {
+          const title = str(song?.title ?? '', 180, { min: 1 });
+          const artist = str(song?.artist ?? '', 180, { min: 1 });
+          const q = encodeURIComponent('track:' + title + ' artist:' + artist);
+          const sr = await fetch('https://api.spotify.com/v1/search?type=track&limit=1&q=' + q, { headers: { Authorization: 'Bearer ' + access } });
+          const data = await sr.json().catch(() => ({}));
+          if (!sr.ok) throw bad('spotify_api_error', 502);
+          const track = data.tracks?.items?.[0];
+          if (track?.uri) uris.push(track.uri); else missing.push({ title, artist });
+        }
+        for (let i = 0; i < uris.length; i += 100) {
+          const ar = await fetch('https://api.spotify.com/v1/playlists/' + encodeURIComponent(playlistId) + '/items', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + access, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uris: uris.slice(i, i + 100) }),
+          });
+          if (!ar.ok) { console.error('Spotify add existing playlist error', await ar.text().catch(() => '')); throw bad('spotify_api_error', 502); }
+        }
+        const pr = await fetch('https://api.spotify.com/v1/playlists/' + encodeURIComponent(playlistId), { headers: { Authorization: 'Bearer ' + access } });
+        const playlist = await pr.json().catch(() => ({}));
+        return send(res, 200, { playlist: { id: playlistId, name: playlist.name || 'Spotify playlist', url: playlist.external_urls?.spotify || null, added: uris.length, missing } }), true;
+      }
+
       if (path === '/api/spotify/create-playlist' && method === 'POST') {
         const u = await requireUser(req);
         const access = await spotifyToken(db, u);
