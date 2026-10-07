@@ -107,7 +107,8 @@ function SIDJCommandCenter({ reqs }) {
     setBusy(true);
     try {
       const top = [...active].sort((a,b)=>(Number(b.tip)||0)-(Number(a.tip)||0)||b.created_at-a.created_at).slice(0,30);
-      const requestText = top.map((r)=>(r.song||'')+(r.artist?' — '+r.artist:'')+(r.tip?' [
+      const requestText = top.map((r)=>(r.song||'')+(r.artist?' — '+r.artist:'')+(r.tip?' [$'+Number(r.tip).toFixed(0)+' tip]':'')+(r.status==='played'?' [PLAYED]':'')).join('\n');
+      const played = active.filter((r)=>r.status==='played').slice(0,20).map((r)=>r.song+(r.artist?' — '+r.artist:'')).join(', ');
       const liveTrack = nowPlaying?.nowPlaying;
       const liveText = liveTrack ? ['NOW PLAYING:', liveTrack.title||'', liveTrack.artist?' — '+liveTrack.artist:'', liveTrack.bpm?' BPM '+liveTrack.bpm:'', liveTrack.key?' KEY '+liveTrack.key:'', liveTrack.genre?' GENRE '+liveTrack.genre:''].join('') : 'NOW PLAYING: unavailable';
       const event = ['LIVE SI DJ QUEUE INTELLIGENCE.','This is a real-time DJ event, not a generic event plan.','Use the live DJ software track as the strongest current context when available.','Analyze the live request signals and recommend what the DJ should consider next.','DJ final say: never treat a request, tip, or recommendation as an automatic play command.','Use the curated library and bridge intelligence. Look for genre momentum, cross-generational fit, energy, repeat requests, tips, useful transitions, and continuity from the current track.','LIVE SOFTWARE DATA:',liveText,'LIVE REQUESTS:',requestText||'none','RECENT PLAYED REQUESTS:',played||'none','Return the strongest useful next-song options first.'].join('\n');
