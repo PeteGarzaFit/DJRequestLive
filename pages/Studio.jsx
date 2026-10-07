@@ -335,7 +335,7 @@ function ShareTab({ dj }) {
     g = x.createRadialGradient(0, H * 0.2, 0, 0, H * 0.2, 700); g.addColorStop(0, a + '33'); g.addColorStop(1, a + '00'); x.fillStyle = g; x.fillRect(0, 0, W, H);
     x.textAlign = 'center'; x.fillStyle = a;
     if ('letterSpacing' in x) x.letterSpacing = '8px';
-    x.font = '500 30px "JetBrains Mono", monospace'; x.fillText('SCAN TO REQUEST A SONG', W / 2, 100);
+    x.font = '600 36px "JetBrains Mono", monospace'; x.fillText('SCAN TO REQUEST A SONG', W / 2, 100);
     if ('letterSpacing' in x) x.letterSpacing = '0px';
 
     // Put the DJ's uploaded logo prominently on the poster when one exists.
