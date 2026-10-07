@@ -13,7 +13,7 @@ function defaultConfig() {
   return {
     source: 'virtualdj-history',
     virtualdjHistory: {
-      historyFile: path.join(os.homedir(), 'Documents', 'VirtualDJ', 'History', 'tracklist.txt')
+      historyFile: path.join(os.homedir(), 'Library', 'Application Support', 'VirtualDJ', 'History', 'tracklist.txt')
     },
     rekordbox: { historyFile: '' }
   };
@@ -35,7 +35,7 @@ function ensureConfig() {
         source: 'virtualdj-history',
         virtualdjHistory: {
           historyFile: config.virtualdjHistory?.historyFile ||
-            path.join(os.homedir(), 'Documents', 'VirtualDJ', 'History', 'tracklist.txt')
+            path.join(os.homedir(), 'Library', 'Application Support', 'VirtualDJ', 'History', 'tracklist.txt')
         },
         rekordbox: config.rekordbox || { historyFile: '' }
       };
