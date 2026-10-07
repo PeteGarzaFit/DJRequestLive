@@ -159,3 +159,5 @@
 @media(max-width:420px){.rl.rl-app .export-grid{grid-template-columns:1fr}.rl.rl-app .export-card.export-package{grid-column:span 1}}
 
 .rl .logo-size-control{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.rl .logo-size-control input{width:100%;accent-color:var(--gold)}.rl .logo-size-control output{font-family:var(--mono);font-size:12px;color:var(--gold);min-width:58px;text-align:right}
+
+.rl .follow-dj{margin:18px 0 4px;padding:18px 0 4px;border-top:1px solid var(--line);display:grid;gap:5px;text-align:center}.rl .follow-dj>strong{font-size:15px}.rl .follow-dj>span{font-size:12px;color:var(--muted)}.rl .follow-links{display:grid;gap:8px;margin-top:8px}
