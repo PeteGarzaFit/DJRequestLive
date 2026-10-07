@@ -1,0 +1,5 @@
+{
+  "source":"virtualdj",
+  "virtualdj":{"baseUrl":"http://127.0.0.1:80","bearer":""},
+  "rekordbox":{"historyFile":""}
+}
