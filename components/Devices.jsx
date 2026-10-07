@@ -1,9 +1,9 @@
 import React from 'react';
-import { Mark } from './Logo.jsx';
+import Logo from './Logo.jsx';
 import Icon from './Icons.jsx';
 import { themeStyle, initials } from '../lib/theme.js';
 
-/* Generic silver-aluminum laptop and titanium-finish phone. Original shapes, no brand marks.
+/* Generic silver-aluminum laptop and black-titanium phone. Original shapes, no brand marks.
    Screens are sized in container units (cqw) so the UI inside scales with the device. */
 
 export function Laptop({ children, className = '' }) {
@@ -21,6 +21,19 @@ export function Laptop({ children, className = '' }) {
   );
 }
 
+function StatusIcons() {
+  return (
+    <svg viewBox="0 0 72 18" aria-hidden="true">
+      <rect x="0" y="11" width="3.6" height="5" rx="1" /><rect x="5.2" y="8" width="3.6" height="8" rx="1" />
+      <rect x="10.4" y="5" width="3.6" height="11" rx="1" /><rect x="15.6" y="2" width="3.6" height="14" rx="1" />
+      <path d="M33 16l3-3.1a4.2 4.2 0 0 0-6 0zM27.6 10.7a7.7 7.7 0 0 1 10.8 0l-1.8 1.9a5.2 5.2 0 0 0-7.2 0zM24.2 7.2a12.6 12.6 0 0 1 17.6 0L40 9.1a10 10 0 0 0-14 0z" />
+      <rect x="46" y="2.6" width="23" height="12.4" rx="3.8" fill="none" stroke="#fff" strokeOpacity=".5" />
+      <rect x="47.8" y="4.4" width="19.4" height="8.8" rx="2.4" />
+      <path d="M70.6 6.6v4.8a2.4 2.4 0 0 0 0-4.8z" opacity=".5" />
+    </svg>
+  );
+}
+
 export function Phone({ children, className = '' }) {
   return (
     <div className={'dv-phone ' + className}>
@@ -28,7 +41,9 @@ export function Phone({ children, className = '' }) {
       <div className="dv-frame">
         <div className="dv-pscreen">
           <span className="dv-punch" />
+          <div className="dv-sb"><span>9:41</span><StatusIcons /></div>
           {children}
+          <span className="dv-home" />
         </div>
       </div>
     </div>
@@ -41,6 +56,8 @@ const SAMPLE = [
   { s: 'Been By Now', a: 'Morgan Wallen', g: 'Alex', t: 5, i: 'MW' },
   { s: 'Hate That I Made You Love Me', a: 'Ariana Grande', g: 'Jordan', t: 10, i: 'AG' },
   { s: 'Dracula', a: 'Tame Impala & JENNIE', g: 'Chris', t: 5, i: 'TI' },
+  { s: 'Espresso', a: 'Sabrina Carpenter', g: 'Taylor', t: 10, i: 'SC' },
+  { s: 'Pink Pony Club', a: 'Chappell Roan', g: 'Maya', t: 5, i: 'CR' },
 ];
 const NAV = [['music', 'Live Requests', true], ['play', 'Now Playing'], ['queue', 'Queue'], ['dollar', 'Tips'], ['chart', 'Analytics'], ['gear', 'Settings']];
 
@@ -49,7 +66,7 @@ export function StudioScreen() {
   return (
     <div className="ds">
       <aside className="ds-side">
-        <div className="ds-brand"><Mark size={22} /><span><em>DJ</em> REQUEST<b>LIVE</b></span></div>
+        <div className="ds-brand"><Logo size="2.7cqw" stack /></div>
         {NAV.map(([ic, l, on]) => <div key={l} className={'ds-nav' + (on ? ' on' : '')}><Icon name={ic} size={14} />{l}</div>)}
       </aside>
       <section className="ds-main">
@@ -79,7 +96,7 @@ export function StudioScreen() {
 export function QrScreen() {
   return (
     <div className="ps">
-      <div className="ps-brand"><Mark size={20} /><span><em>DJ</em> REQUEST<b>LIVE</b></span></div>
+      <div className="ps-brand"><Logo size="8.5cqw" /></div>
       <h5>Scan to<br />request a song</h5>
       <img src="/djrequestlive-qr.svg" alt="Sample QR code" />
       <div className="ps-btn">Request a song</div>
