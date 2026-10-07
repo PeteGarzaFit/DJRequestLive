@@ -338,7 +338,9 @@ function ShareTab({ dj }) {
           i.onerror = reject;
           i.src = dj.logo + (dj.logo.includes('?') ? '&' : '?') + 'poster=' + Date.now();
         });
-        const maxW = 720; const maxH = 210;
+        const defaultPosterLogo = 560;
+        const posterLogo = Math.max(220, Math.min(720, Number(p.ls) ? Number(p.ls) * 2 : defaultPosterLogo));
+        const maxW = posterLogo; const maxH = 240;
         const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
         const lw = Math.max(1, Math.round(img.naturalWidth * scale));
         const lh = Math.max(1, Math.round(img.naturalHeight * scale));
