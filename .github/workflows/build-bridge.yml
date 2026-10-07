@@ -1,0 +1,47 @@
+name: Build SI DJ Bridge
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'bridge-v*'
+
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Package Bridge
+        run: |
+          mkdir -p dist
+          cp -R bridge dist/bridge
+          cat > dist/START_BRIDGE.command <<'EOF'
+          #!/bin/zsh
+          cd "$(dirname "$0")"
+          exec node bridge/server.mjs
+          EOF
+          chmod +x dist/START_BRIDGE.command
+          ditto -c -k --keepParent dist SI-DJ-Bridge-unsigned.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: si-dj-bridge-mac-unsigned
+          path: SI-DJ-Bridge-unsigned.zip
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item bridge dist/bridge -Recurse
+          Compress-Archive -Path dist -DestinationPath SI-DJ-Bridge-unsigned.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: si-dj-bridge-windows-unsigned
+          path: SI-DJ-Bridge-unsigned.zip
