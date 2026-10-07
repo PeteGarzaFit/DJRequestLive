@@ -64,14 +64,14 @@ export default function Studio() {
 
   async function logout() { await saveNow(); try { await api.logout(); } catch { /* ignore */ } nav('/', { replace: true }); }
 
-  if (fail) return <div className="rl"><div className="wrap"><section className="panel center"><h2 style={{ fontSize: 18 }}>We couldn’t load your page</h2><p className="hint">Refresh to try again.</p></section></div></div>;
-  if (!dj) return <div className="rl"><div className="wrap"><div className="panel center"><p className="hint">Loading your studio…</p></div></div></div>;
+  if (fail) return <div className="rl rl-app"><div className="wrap"><section className="panel center"><h2 style={{ fontSize: 18 }}>We couldn’t load your page</h2><p className="hint">Refresh to try again.</p></section></div></div>;
+  if (!dj) return <div className="rl rl-app"><div className="wrap"><div className="panel center"><p className="hint">Loading your studio…</p></div></div></div>;
 
   return (
-    <div className="rl">
+    <div className="rl rl-app">
       <div className="wrap wide">
         <div className="shead">
-          <Link to="/" className="brand" style={{ textDecoration: 'none', color: 'inherit' }}><Mark size={24} color="#f4eff8" accent="#e9bb5f" />DJ Request Live</Link>
+          <Link to="/" className="brand" style={{ textDecoration: 'none', color: 'inherit' }}><Mark size={28} badge />DJ Request Live</Link>
           <div className="shead-r">
             <label className="golive" htmlFor="golive">
               <input type="checkbox" id="golive" checked={!!dj.is_live} onChange={(e) => { edit({ is_live: e.target.checked }); setTimeout(saveNow, 0); }} />
