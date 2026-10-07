@@ -13,7 +13,9 @@
     "build": "vite build",
     "start": "node server.js",
     "preview": "vite preview",
-    "bridge": "node bridge/server.mjs"
+    "bridge": "node bridge/server.mjs",
+    "bridge:app": "electron bridge-app/main.cjs",
+    "bridge:package": "electron-builder --mac"
   },
   "dependencies": {
     "mysql2": "^3.11.3",
@@ -25,6 +27,39 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
-    "vite": "^7.1.7"
+    "vite": "^7.1.7",
+    "electron": "^38.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "live.djrequest.si-bridge",
+    "productName": "SI DJ Bridge",
+    "files": [
+      "bridge-app/**/*",
+      "bridge/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "bridge",
+        "to": "bridge",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.music",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "SI DJ Bridge"
+    },
+    "directories": {
+      "output": "release"
+    }
   }
 }
