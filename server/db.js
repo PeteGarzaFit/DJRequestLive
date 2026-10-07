@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { songRows } from '../lib/songLibrary.js';
 
 // One small interface for both databases:
 //   all(sql, params) -> rows     get(sql, params) -> row | null     run(sql, params) -> { insertId, changes }
@@ -31,6 +32,10 @@ export async function createDb() {
   });
   const ddl = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8').replace(/^\s*--.*$/gm, '');
   for (const stmt of ddl.split(';').map((s) => s.trim()).filter(Boolean)) await pool.query(stmt);
+  await seedSongs({
+    all: async (sql, p = []) => { const [rows] = await pool.query(sql, p); return rows; },
+    run: async (sql, p = []) => { const [r] = await pool.query(sql, p); return { insertId: Number(r.insertId || 0), changes: Number(r.affectedRows || 0) }; },
+  });
   return {
     driver: 'mysql',
     async all(sql, p = []) { const [rows] = await pool.query(sql, p); return rows; },
@@ -38,4 +43,17 @@ export async function createDb() {
     async run(sql, p = []) { const [r] = await pool.query(sql, p); return { insertId: Number(r.insertId || 0), changes: Number(r.affectedRows || 0) }; },
     async close() { await pool.end(); },
   };
+}
+
+
+async function seedSongs(db) {
+  const n = await db.all('SELECT COUNT(*) AS n FROM songs');
+  if (Number(n[0]?.n || 0) > 0) return;
+  const rows = songRows();
+  for (const s of rows) {
+    await db.run(
+      'INSERT IGNORE INTO songs (title, artist, genre, era, bpm, energy, dancefloor_score, singalong_score, crossgen_score, content, tags) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      [s.title, s.artist, s.genre, s.era, s.bpm, s.energy, s.dancefloor, s.singalong, s.crossgen, s.content, s.tags],
+    );
+  }
 }
