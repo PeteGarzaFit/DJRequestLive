@@ -9,7 +9,7 @@ import GuestView from '../components/GuestView.jsx';
 import { Mark } from '../components/Logo.jsx';
 import Planner from './Planner.jsx';
 
-const TABS = [['queue', 'Queue'], ['planner', 'AI Planner'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
+const TABS = [['queue', 'SUPER INTELLIGENCE QUE'], ['planner', 'AI Planner'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
 const FILTERS = [['new', 'New'], ['approved', 'Approved'], ['played', 'Played'], ['declined', 'Declined']];
 const ORIGIN = () => window.location.origin;
 
