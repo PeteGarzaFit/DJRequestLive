@@ -163,75 +163,68 @@ export function createApp(db) {
         if (limited(`ai-plan:${u.id}`, 20, 3600000)) throw bad('rate_limited', 429);
         const b = await readJson(req);
         const event = str(b.event, 2500, { min: 2 });
-        if (!process.env.OPENAI_API_KEY) throw bad('ai_not_configured', 503);
-        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-        const model = process.env.OPENAI_MODEL || 'gpt-6-luna';
+
         let library;
         try {
-          library = await db.all(
+          library = normalizePlannerLibrary(await db.all(
             'SELECT title, artist, genre, era, bpm, energy, dancefloor_score, singalong_score, crossgen_score, content, tags FROM songs WHERE active = 1 ORDER BY (dancefloor_score + singalong_score + crossgen_score) DESC, id ASC LIMIT 300'
-          );
+          ));
         } catch (e) {
-          // Keep the planner usable if an older deployment has not created the songs table yet.
           console.error('AI planner library DB error:', { code: e?.code, message: e?.message });
-          library = songRows().map((s) => ({
+          library = normalizePlannerLibrary(songRows().map((s) => ({
             title: s.title, artist: s.artist, genre: s.genre, era: s.era, bpm: s.bpm,
             energy: s.energy, dancefloor_score: s.dancefloor, singalong_score: s.singalong,
             crossgen_score: s.crossgen, content: s.content, tags: s.tags,
-          })).slice(0, 300);
+          })));
         }
-        const libraryText = JSON.stringify(library);
-        const plannerInput = `EVENT:\n${event}\n\nCURATED DJREQUESTLIVE SONG LIBRARY (recommend only exact title/artist pairs from this data):\n${libraryText}`;
-        let response;
+
         try {
-          response = await client.responses.create({
-            model,
-            instructions: AI_PLAN_SYSTEM,
-            input: plannerInput,
-            max_output_tokens: 7000,
-          });
+          if (library.length < 72) throw new Error('planner_library_too_small');
+          if (!process.env.OPENAI_API_KEY) throw new Error('ai_not_configured');
+
+          const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+          const model = process.env.OPENAI_MODEL || 'gpt-6-luna';
+          const plannerInput = `EVENT:
+${event}
+
+CURATED DJREQUESTLIVE SONG LIBRARY (recommend only exact title/artist pairs from this data):
+${JSON.stringify(library)}`;
+
+          let lastFailure = null;
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              const response = await client.responses.create({
+                model,
+                instructions: AI_PLAN_SYSTEM + (attempt === 2
+                  ? '\\nIMPORTANT RETRY: Return compact valid JSON only. Exactly 4 recommendation groups with exactly 10, 10, 42, 10 songs. Do not add commentary or markdown.'
+                  : ''),
+                input: plannerInput,
+                max_output_tokens: 10000,
+              });
+              const raw = String(response.output_text || '').trim().replace(/^\`\`\`json\s*/i, '').replace(/\s*\`\`\`$/i, '');
+              let plan;
+              try { plan = JSON.parse(raw); } catch { throw new Error('invalid_json'); }
+              validatePlannerPlan(plan, library);
+              return send(res, 200, { plan, planner_source: 'ai' }), true;
+            } catch (e) {
+              lastFailure = e;
+              console.error('AI planner attempt failed:', { attempt, message: e?.message, status: e?.status, code: e?.code });
+            }
+          }
+          throw lastFailure || new Error('ai_planner_failed');
         } catch (e) {
-          console.error('AI planner OpenAI error:', {
-            status: e?.status,
-            code: e?.code,
-            type: e?.type,
-            message: e?.message,
-          });
-          throw bad('ai_api_error', 502);
-        }
-        const raw = String(response.output_text || '').trim().replace(/^\`\`\`json\s*/i, '').replace(/\s*\`\`\`$/i, '');
-        let plan;
-        try { plan = JSON.parse(raw); } catch { console.error('AI planner invalid JSON:', raw.slice(0, 500)); throw bad('ai_bad_response', 502); }
-        if (!plan || typeof plan !== 'object' || !Array.isArray(plan.music_mix) || !Array.isArray(plan.timeline) || !Array.isArray(plan.recommendations)) {
-          console.error('AI planner missing required arrays:', {
-            has_plan: !!plan,
-            music_mix: Array.isArray(plan?.music_mix),
-            timeline: Array.isArray(plan?.timeline),
-            recommendations: Array.isArray(plan?.recommendations),
-          });
-          throw bad('ai_bad_response', 502);
-        }
-        const allowed = new Set(library.map((s) => s.title + '\\u0000' + s.artist));
-        for (const group of plan.recommendations) {
-          if (!group || typeof group !== 'object' || !Array.isArray(group.songs)) {
-            console.error('AI planner malformed recommendation group:', group);
-            throw bad('ai_bad_response', 502);
-          }
-          for (const song of group.songs) {
-            if (!song || typeof song !== 'object' || typeof song.title !== 'string' || typeof song.artist !== 'string') {
-              console.error('AI planner malformed song:', song);
-              throw bad('ai_bad_response', 502);
-            }
-            if (!allowed.has(song.title + '\\u0000' + song.artist)) {
-              console.error('AI planner recommended song outside curated library:', song);
-              throw bad('ai_bad_response', 502);
-            }
+          console.error('AI planner falling back to curated library:', { message: e?.message, code: e?.code });
+          try {
+            const fallback = buildFallbackPlanner(event, library);
+            return send(res, 200, { plan: fallback, planner_source: 'curated_fallback', warning: 'ai_unavailable' }), true;
+          } catch (fallbackError) {
+            console.error('AI planner fallback failed:', fallbackError);
+            return send(res, 503, { error: 'planner_unavailable', message: 'The planner could not generate a safe result from the curated library.' }), true;
           }
         }
-        return send(res, 200, { plan }), true;
       }
 
-            if (path === '/api/spotify/connect' && method === 'GET') {
+      if (path === '/api/spotify/connect' && method === 'GET') {
         const u = await requireUser(req);
         if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) throw bad('spotify_not_configured', 503);
         const state = spotifyState();
@@ -520,6 +513,118 @@ export function createApp(db) {
       console.error('API error:', e);
       return send(res, 500, { error: 'server_error' }), true;
     }
+  };
+}
+
+
+function normalizePlannerLibrary(rows) {
+  return (Array.isArray(rows) ? rows : []).filter((s) =>
+    s && typeof s.title === 'string' && typeof s.artist === 'string'
+  ).map((s) => ({
+    title: s.title, artist: s.artist, genre: s.genre, era: s.era, bpm: Number(s.bpm) || 0,
+    energy: Number(s.energy) || 0, dancefloor_score: Number(s.dancefloor_score) || 0,
+    singalong_score: Number(s.singalong_score) || 0, crossgen_score: Number(s.crossgen_score) || 0,
+    content: s.content || 'Clean', tags: String(s.tags || ''),
+  }));
+}
+
+function plannerKey(song) {
+  return String(song?.title || '') + '\\u0000' + String(song?.artist || '');
+}
+
+function validatePlannerPlan(plan, library) {
+  if (!plan || typeof plan !== 'object') throw new Error('plan_not_object');
+  if (!Array.isArray(plan.music_mix) || !Array.isArray(plan.timeline) || !Array.isArray(plan.recommendations)) throw new Error('plan_missing_arrays');
+  if (plan.recommendations.length !== 4) throw new Error('plan_wrong_phase_count');
+  const allowed = new Set(library.map(plannerKey));
+  const expected = [10, 10, 42, 10];
+  let total = 0;
+  for (let i = 0; i < plan.recommendations.length; i++) {
+    const group = plan.recommendations[i];
+    if (!group || typeof group !== 'object' || !Array.isArray(group.songs)) throw new Error('plan_bad_group');
+    if (group.songs.length !== expected[i]) throw new Error('plan_wrong_song_count');
+    total += group.songs.length;
+    for (const song of group.songs) {
+      if (!song || typeof song !== 'object' || typeof song.title !== 'string' || typeof song.artist !== 'string') throw new Error('plan_bad_song');
+      if (!allowed.has(plannerKey(song))) throw new Error('plan_song_outside_library');
+    }
+  }
+  if (total !== 72) throw new Error('plan_wrong_total');
+  return plan;
+}
+
+function fallbackSongScore(song, event, phase) {
+  const text = String(event || '').toLowerCase();
+  const tags = String(song.tags || '').toLowerCase();
+  let score = Number(song.dancefloor_score || 0) * 2 + Number(song.singalong_score || 0) + Number(song.crossgen_score || 0);
+  if (/wedding|marriage|bride|groom|reception/.test(text) && /wedding|first-dance/.test(tags)) score += 24;
+  if (/country|texas/.test(text) && /country|texas/.test(tags)) score += 18;
+  if (/tejano|cumbia|regional mexican|mexican-american|latin/.test(text) && /tejano|cumbia|regional_mexican|latin|bridge/.test(tags)) score += 24;
+  if (/mixed|cross.?generational|all ages|30.?60|family/.test(text) && Number(song.crossgen_score || 0) >= 9) score += 12;
+  if (/current|new|2026/.test(text) && /current/.test(tags)) score += 8;
+  if (phase === 'opening' && Number(song.energy || 0) <= 8) score += 8;
+  if (phase === 'dinner' && Number(song.energy || 0) >= 5 && Number(song.energy || 0) <= 9) score += 6;
+  if (phase === 'peak') score += Number(song.energy || 0) * 2;
+  if (phase === 'closing' && /singalong|anthem|wedding|party/.test(tags)) score += 12;
+  if (/family|wedding|corporate|school|mixed-age/.test(text) && String(song.content).toLowerCase() !== 'clean') score -= 40;
+  if (/bridge/.test(tags) && /country|texas|tejano|cumbia|latin|mexican/.test(text)) score += 30;
+  return score;
+}
+
+function buildFallbackPlanner(event, library) {
+  const phases = [
+    { phase: 'Reception Opening', role: 'opening', count: 10, reason: 'Warm the room with familiar, accessible records and establish the event identity without spending the peak-floor ammunition.' },
+    { phase: 'Dinner / Early Dance', role: 'dinner', count: 10, reason: 'Open the dance floor gradually with recognizable records, wedding-safe favorites and culturally useful crossover.' },
+    { phase: 'Peak Dance Floor', role: 'peak', count: 42, reason: 'Use the signature SI DJ 42 crate: proven hits, participation records, cross-generational favorites and bridge records for the specific room.' },
+    { phase: 'Final Hour / Closing', role: 'closing', count: 10, reason: 'Finish with high-recognition singalongs, anthems and records that leave the room together.' },
+  ];
+  const used = new Set();
+  const pick = (role, count) => {
+    const ranked = [...library].sort((a, b) => fallbackSongScore(b, event, role) - fallbackSongScore(a, event, role));
+    const out = [];
+    for (const song of ranked) {
+      const key = plannerKey(song);
+      if (used.has(key)) continue;
+      used.add(key);
+      out.push({
+        title: song.title,
+        artist: song.artist,
+        reason: /bridge_/.test(String(song.tags)) && /country|texas|tejano|cumbia|latin|mexican/i.test(event)
+          ? 'Use this as a bridge between musical pockets rather than as a hard genre switch.'
+          : 'Strong fit for this phase based on the curated DJ library scores and event context.',
+      });
+      if (out.length === count) break;
+    }
+    return out;
+  };
+  const recommendations = phases.map((p) => ({ phase: p.phase, reason: p.reason, songs: pick(p.role, p.count) }));
+  if (recommendations.some((g) => g.songs.length !== g.count)) throw new Error('fallback_library_too_small');
+  const mix = /country|texas/i.test(event) && /tejano|cumbia|latin|mexican/i.test(event)
+    ? [
+        { label: 'Country / Texas Country', percent: 30 },
+        { label: 'Tejano / Cumbia / Regional Mexican', percent: 20 },
+        { label: 'Latin Crossover', percent: 15 },
+        { label: 'Pop, R&B & Dance', percent: 20 },
+        { label: 'Rock, Disco & Singalongs', percent: 15 },
+      ]
+    : [
+        { label: 'Core Event Favorites', percent: 35 },
+        { label: 'Current & Crossover', percent: 20 },
+        { label: 'Dance Floor', percent: 25 },
+        { label: 'Cross-Generational', percent: 20 },
+      ];
+  return {
+    title: 'Curated SI DJ Event Plan',
+    summary: 'The AI planner was unavailable for this request, so SI DJ generated a production-safe plan directly from the curated music intelligence library. The plan preserves the requested 10 / 10 / 42 / 10 crate structure.',
+    crowd_profile: 'Generated from the event brief and the curated DJ library; use the bridge records and crowd response to make final live decisions.',
+    music_mix: mix,
+    timeline: phases.map((p) => ({ phase: p.phase, direction: p.reason })),
+    special_moments: [
+      { moment: 'First Dance', music_direction: 'Confirm the couple-selected song and version in advance.' },
+      { moment: 'Family / Cultural Moments', music_direction: 'Confirm family must-plays and preferred versions rather than guessing.' },
+    ],
+    recommendations,
+    planner_source: 'curated_fallback',
   };
 }
 
