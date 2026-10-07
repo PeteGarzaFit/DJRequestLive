@@ -1,5 +1,6 @@
 import React from 'react';
 import Logo from '../components/Logo.jsx';
+import './bridge.css';
 
 const GITHUB_RELEASE = 'https://github.com/PeteGarzaFit/DJRequestLive/releases/latest/download/';
 
