@@ -284,7 +284,9 @@ function DesignTab({ dj, edit, saved, mergeMedia, goTab }) {
         <label className="switch" htmlFor="d-v">Show spinning vinyl<input type="checkbox" id="d-v" checked={d.v !== 0} onChange={(e) => setD({ v: e.target.checked ? 1 : 0 })} /></label>
         <div className="row2">
           <div className="field"><label htmlFor="d-lb">Vinyl label (up to 3 letters)</label><input className="input" id="d-lb" maxLength={3} value={d.lb || ''} placeholder={initials(dj.name)} onChange={(e) => setD({ lb: e.target.value })} /></div>
-          <div className="field"><label htmlFor="d-ig">Instagram</label><input className="input" id="d-ig" maxLength={40} value={d.ig || ''} placeholder="username" autoCapitalize="off" onChange={(e) => setD({ ig: e.target.value.replace(/[^A-Za-z0-9._@]/g, '') })} /></div>
+          <div className="field"><label htmlFor="d-ig">Instagram</label><input className="input" id="d-ig" maxLength={40} value={d.ig || ''} placeholder="@username" autoCapitalize="off" onChange={(e) => setD({ ig: e.target.value.replace(/[^A-Za-z0-9._@]/g, '') })} /></div>
+          <div className="field"><label htmlFor="d-tt">TikTok</label><input className="input" id="d-tt" maxLength={40} value={d.tt || ''} placeholder="@username" autoCapitalize="off" onChange={(e) => setD({ tt: e.target.value.replace(/[^A-Za-z0-9._@]/g, '') })} /></div>
+          <div className="field"><label htmlFor="d-fb">Facebook</label><input className="input" id="d-fb" maxLength={200} value={d.fb || ''} placeholder="username or full URL" autoCapitalize="off" onChange={(e) => setD({ fb: e.target.value.trim() })} /></div>
         </div>
         <div className="field"><label htmlFor="d-live">Status line</label><input className="input" id="d-live" maxLength={40} value={d.live || ''} placeholder="Taking requests now" onChange={(e) => setD({ live: e.target.value })} /></div>
         <div className="field"><label htmlFor="d-tips">Quick tip amounts (up to 4, comma separated)</label><input className="input" id="d-tips" maxLength={30} value={d.tips || ''} placeholder="5,10,20,50" onChange={(e) => setD({ tips: e.target.value.replace(/[^\d.,\s]/g, '') })} /></div>
