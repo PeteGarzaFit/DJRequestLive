@@ -188,7 +188,7 @@ export function createApp(db) {
             model,
             instructions: AI_PLAN_SYSTEM,
             input: plannerInput,
-            max_output_tokens: 3000,
+            max_output_tokens: 7000,
           });
         } catch (e) {
           console.error('AI planner OpenAI error:', {
