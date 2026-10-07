@@ -18,6 +18,11 @@ CREATE TABLE IF NOT EXISTS users (
   wall_media BIGINT UNSIGNED NULL,
   photos_json TEXT NOT NULL,
   is_live TINYINT(1) NOT NULL DEFAULT 1,
+  spotify_access_token TEXT NULL,
+  spotify_refresh_token TEXT NULL,
+  spotify_expires_at BIGINT NULL,
+  spotify_account_id VARCHAR(120) NULL,
+  spotify_display_name VARCHAR(180) NULL,
   created_at BIGINT NOT NULL
 ) CHARACTER SET utf8mb4;
 
