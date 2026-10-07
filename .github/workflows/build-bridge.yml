@@ -6,6 +6,9 @@ on:
     tags:
       - 'bridge-v*'
 
+permissions:
+  contents: write
+
 jobs:
   mac:
     runs-on: macos-14
@@ -14,21 +17,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Package Bridge
-        run: |
-          mkdir -p dist
-          cp -R bridge dist/bridge
-          cat > dist/START_BRIDGE.command <<'EOF'
-          #!/bin/zsh
-          cd "$(dirname "$0")"
-          exec node bridge/server.mjs
-          EOF
-          chmod +x dist/START_BRIDGE.command
-          ditto -c -k --keepParent dist SI-DJ-Bridge-unsigned.zip
+          cache: npm
+      - run: npm ci
+      - name: Build Mac desktop installer
+        run: npx electron-builder --mac dmg --publish never
       - uses: actions/upload-artifact@v4
         with:
-          name: si-dj-bridge-mac-unsigned
-          path: SI-DJ-Bridge-unsigned.zip
+          name: si-dj-bridge-mac
+          path: release/SI-DJ-Bridge.dmg
+
   windows:
     runs-on: windows-2025
     steps:
@@ -36,12 +33,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item bridge dist/bridge -Recurse
-          Compress-Archive -Path dist -DestinationPath SI-DJ-Bridge-unsigned.zip
+          cache: npm
+      - run: npm ci
+      - name: Build Windows desktop installer
+        run: npx electron-builder --win nsis --publish never
       - uses: actions/upload-artifact@v4
         with:
-          name: si-dj-bridge-windows-unsigned
-          path: SI-DJ-Bridge-unsigned.zip
+          name: si-dj-bridge-windows
+          path: release/SI-DJ-Bridge-Setup.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/bridge-v')
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: si-dj-bridge-mac
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          name: si-dj-bridge-windows
+          path: release
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" release/SI-DJ-Bridge.dmg release/SI-DJ-Bridge-Setup.exe --title "SI DJ Bridge ${{ github.ref_name }}" --generate-notes
