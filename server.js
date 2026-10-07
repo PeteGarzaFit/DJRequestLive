@@ -45,23 +45,27 @@ async function serveStatic(req, res, pathname) {
   res.end(req.method === 'HEAD' ? undefined : data);
 }
 
-const db = await createDb();
-const handle = createApp(db);
+// No top-level await: Hostinger loads this file with require(), which rejects async modules.
+async function main() {
+  const db = await createDb();
+  const handle = createApp(db);
 
-const server = http.createServer(async (req, res) => {
-  try {
-    const url = new URL(req.url, 'http://localhost');
-    for (const [k, v] of Object.entries(SECURITY)) res.setHeader(k, v);
-    if (await handle(req, res, url)) return;
-    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
-    await serveStatic(req, res, url.pathname);
-  } catch (e) {
-    console.error(e);
-    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
-    res.end('Server error');
-  }
-});
+  const server = http.createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      for (const [k, v] of Object.entries(SECURITY)) res.setHeader(k, v);
+      if (await handle(req, res, url)) return;
+      if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
+      await serveStatic(req, res, url.pathname);
+    } catch (e) {
+      console.error(e);
+      if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Server error');
+    }
+  });
 
-const port = Number(process.env.PORT || 3000);
-server.listen(port, () => console.log(`DJ Request Live listening on ${port} (${db.driver})`));
-export { server };
+  const port = Number(process.env.PORT || 3000);
+  server.listen(port, () => console.log(`DJ Request Live listening on ${port} (${db.driver})`));
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
