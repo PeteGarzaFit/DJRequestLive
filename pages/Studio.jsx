@@ -321,52 +321,6 @@ function ShareTab({ dj }) {
       <div className="poster-actions"><button className="btn btn-gold btn-block" onClick={poster}>Download poster (PNG)</button><button className="btn btn-ghost btn-block" onClick={() => canvasRef.current && canvasRef.current.toBlob((b) => b && saveBlob(b, `${dj.slug}-qr.png`), 'image/png')}>Download QR only (PNG)</button><button className="btn btn-ghost btn-block" onClick={downloadQrSvg}>Download QR only (SVG)</button><a className="btn btn-ghost btn-block" href={`/${dj.slug}`} target="_blank" rel="noopener noreferrer">Open my guest page ↗</a></div>
       <div className="panel" style={{ marginTop: 16, background: 'rgba(255,255,255,.035)' }}><h3 style={{ fontSize: 16, marginBottom: 6 }}>Make your own custom poster</h3><p className="hint">Download the QR above and drop it into Canva, Photoshop, Adobe Express, or an AI design tool. For the best print quality, use the SVG.</p><div className="field"><label>AI design prompt</label><textarea className="input" rows={5} readOnly value={`Create a premium professional DJ poster using this QR code. Keep the QR code completely unchanged and fully scannable. Use my DJ logo, brand colors, and a modern nightlife aesthetic. Include the text "SCAN TO REQUEST A SONG" and "${link.replace(/^https?:\/\//, '')}". Do not crop, distort, recolor, blur, stylize, or place graphics over the QR code. Leave clear white space around the QR code.`} /><button className="btn btn-ghost btn-block" style={{ marginTop: 8 }} onClick={async () => toast((await copyText(`Create a premium professional DJ poster using this QR code. Keep the QR code completely unchanged and fully scannable. Use my DJ logo, brand colors, and a modern nightlife aesthetic. Include the text "SCAN TO REQUEST A SONG" and "${link.replace(/^https?:\/\//, '')}". Do not crop, distort, recolor, blur, stylize, or place graphics over the QR code. Leave clear white space around the QR code.`)) ? 'Prompt copied' : 'Couldn’t copy')}>Copy AI prompt</button></div></div>
       <p className="hint">The poster is sized for a table tent or 8×10 print. Your QR always points to your personal DJ Request Live page.</p></section></>);
-/* ---------------- QR + poster ---------------- */
-function saveBlob(blob, name) { const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); }
-
-function ShareTab({ dj }) {
-  const canvasRef = useRef(null); const link = `${ORIGIN()}/${dj.slug}`; const methods = PAY.filter((x) => clean(dj.pay[x.k])).map((x) => x.name).join(' · ');
-  useEffect(() => { if (canvasRef.current) QRCode.toCanvas(canvasRef.current, link, { width: 512, margin: 0, errorCorrectionLevel: 'H', color: { dark: '#140e1a', light: '#ffffff' } }).catch(() => {}); }, [link]);
-  async function downloadQrSvg() {
-    try {
-      const svg = await QRCode.toString(link, { type: 'svg', margin: 0, errorCorrectionLevel: 'H', width: 1200, color: { dark: '#140e1a', light: '#ffffff' } });
-      saveBlob(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), `${dj.slug}-qr.svg`);
-      toast('QR SVG downloaded');
-    } catch { toast('Couldn’t create the SVG QR'); }
-  }
-  async function poster() {
-    const qr = canvasRef.current; if (!qr) { toast('QR isn’t ready yet'); return; } const p = toProfile(dj);
-    const a = hex(p.a) ? p.a : '#e9bb5f'; const gl = hex(p.gl) ? p.gl : '#d8478e'; const bg = BGS[p.bg] || BGS.midnight; const dispFont = (FONTS[p.f] || FONTS.bold).v;
-    try { await document.fonts.load(`800 80px ${dispFont.split(',')[0]}`); await document.fonts.load('500 28px "JetBrains Mono"'); await document.fonts.load('700 30px Manrope'); } catch { /* fonts optional */ }
-    const W = 1080; const H = 1500; const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
-    x.fillStyle = bg.ink; x.fillRect(0, 0, W, H);
-    let g = x.createRadialGradient(W * 0.85, 0, 0, W * 0.85, 0, 900); g.addColorStop(0, gl + '88'); g.addColorStop(1, gl + '00'); x.fillStyle = g; x.fillRect(0, 0, W, H);
-    g = x.createRadialGradient(0, H * 0.2, 0, 0, 0, 700); g.addColorStop(0, a + '33'); g.addColorStop(1, a + '00'); x.fillStyle = g; x.fillRect(0, 0, W, H);
-    x.textAlign = 'center'; x.fillStyle = a; if ('letterSpacing' in x) x.letterSpacing = '8px'; x.font = '600 36px "JetBrains Mono", monospace'; x.fillText('SCAN TO REQUEST A SONG', W / 2, 100); if ('letterSpacing' in x) x.letterSpacing = '0px';
-    let logoHeight = 0;
-    if (dj.logo) {
-      try {
-        const img = await new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = dj.logo + (dj.logo.includes('?') ? '&' : '?') + 'poster=' + Date.now(); });
-        const defaultPosterLogo = 760; const posterLogo = Math.max(400, Math.min(900, Number(p.pls) || defaultPosterLogo)); const maxW = posterLogo; const maxH = 360;
-        const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight); const lw = Math.max(1, Math.round(img.naturalWidth * scale)); const lh = Math.max(1, Math.round(img.naturalHeight * scale)); const ly = 145;
-        x.drawImage(img, (W - lw) / 2, ly, lw, lh); logoHeight = lh;
-      } catch { /* poster still works if the logo cannot be loaded */ }
-    }
-    const showName = dj.showName !== undefined ? dj.showName !== false : !dj.logo; let size = 112; const name = (dj.name || '').toUpperCase();
-    const nameY = showName ? Math.max(390, 175 + logoHeight + 85) : Math.max(330, 175 + logoHeight + 45);
-    if (showName) { do { x.font = `800 ${size}px ${dispFont}`; size -= 4; } while (x.measureText(name).width > W - 140 && size > 40); x.fillStyle = '#f4eff8'; x.fillText(name, W / 2, nameY); }
-    const q = 620; const qx = (W - q) / 2; const qy = showName ? nameY + 105 : nameY + 55;
-    x.fillStyle = '#fbf7ef'; x.beginPath(); x.roundRect(qx - 38, qy - 38, q + 76, q + 76, 46); x.fill(); x.imageSmoothingEnabled = false; x.drawImage(qr, qx, qy, q, q);
-    x.fillStyle = '#f4eff8'; x.font = '600 36px "Manrope", system-ui, sans-serif'; x.fillText('Pick a song. Send a tip. I’ll play it.', W / 2, qy + q + 105);
-    x.fillStyle = a; x.font = '700 30px "Manrope", system-ui, sans-serif'; x.fillText(PAY.filter((m) => clean(dj.pay[m.k])).map((m) => m.name).join('   ·   '), W / 2, qy + q + 165);
-    x.fillStyle = '#a197ae'; x.font = '500 24px "JetBrains Mono", monospace'; x.fillText(link.replace(/^https?:\/\//, ''), W / 2, H - 70);
-    c.toBlob((b) => b && saveBlob(b, `${dj.slug}-request-poster.png`), 'image/png');
-  }
-  return (<><div className="ticket"><span className="t-sub">Scan to request a song</span><h2>{dj.name}</h2><div id="qr" aria-label="QR code to your request page"><canvas ref={canvasRef} width="512" height="512" /></div><div className="perf" /><span className="pays">{methods || 'Add a payment app on My page'}</span></div>
-    <section className="panel"><div className="field"><label>Your request link</label><div className="linkbox"><code>{link}</code><button className="btn btn-ghost" onClick={async () => toast((await copyText(link)) ? 'Link copied' : 'Couldn’t copy')}>Copy</button></div></div>
-      <div className="poster-actions"><button className="btn btn-gold btn-block" onClick={poster}>Download poster (PNG)</button><button className="btn btn-ghost btn-block" onClick={() => canvasRef.current && canvasRef.current.toBlob((b) => b && saveBlob(b, `${dj.slug}-qr.png`), 'image/png')}>Download QR only (PNG)</button><button className="btn btn-ghost btn-block" onClick={downloadQrSvg}>Download QR only (SVG)</button><a className="btn btn-ghost btn-block" href={`/${dj.slug}`} target="_blank" rel="noopener noreferrer">Open my guest page ↗</a></div>
-      <div className="panel" style={{ marginTop: 16, background: 'rgba(255,255,255,.035)' }}><h3 style={{ fontSize: 16, marginBottom: 6 }}>Make your own custom poster</h3><p className="hint">Download the QR above and drop it into Canva, Photoshop, Adobe Express, or an AI design tool. For the best print quality, use the SVG.</p><div className="field"><label>AI design prompt</label><textarea className="input" rows={5} readOnly value={`Create a premium professional DJ poster using this QR code. Keep the QR code completely unchanged and fully scannable. Use my DJ logo, brand colors, and a modern nightlife aesthetic. Include the text "SCAN TO REQUEST A SONG" and "${link.replace(/^https?:\/\//, '')}". Do not crop, distort, recolor, blur, stylize, or place graphics over the QR code. Leave clear white space around the QR code.`} /><button className="btn btn-ghost btn-block" style={{ marginTop: 8 }} onClick={async () => toast((await copyText(`Create a premium professional DJ poster using this QR code. Keep the QR code completely unchanged and fully scannable. Use my DJ logo, brand colors, and a modern nightlife aesthetic. Include the text "SCAN TO REQUEST A SONG" and "${link.replace(/^https?:\/\//, '')}". Do not crop, distort, recolor, blur, stylize, or place graphics over the QR code. Leave clear white space around the QR code.`)) ? 'Prompt copied' : 'Couldn’t copy')}>Copy AI prompt</button></div></div>
-      <p className="hint">The poster is sized for a table tent or 8×10 print. Your QR always points to your personal DJ Request Live page.</p></section></>);
 }+Number(r.tip).toFixed(0)+' tip]':'')+(r.status==='played'?' [PLAYED]':'')).join('\n');
       const played = active.filter((r)=>r.status==='played').slice(0,20).map((r)=>r.song+(r.artist?' — '+r.artist:'')).join(', ');
       const liveTrack = nowPlaying?.nowPlaying;
