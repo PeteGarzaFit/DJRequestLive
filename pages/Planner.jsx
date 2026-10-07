@@ -271,11 +271,14 @@ function SpotifyPlaylistCard({ plan }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [playlists, setPlaylists] = useState([]);
+  const [selectedPlaylist, setSelectedPlaylist] = useState('');
+  const [mode, setMode] = useState('new');
 
   useEffect(() => {
     setName(String(plan?.title || 'DJ Request Live Master Playlist').slice(0, 100));
     setResult(null); setError('');
-    api.spotifyStatus().then(setStatus).catch((e) => setStatus({ connected: false, error: e.code }));
+    api.spotifyStatus().then((s) => { setStatus(s); if (s.connected) api.spotifyPlaylists().then((x) => setPlaylists(x.playlists || [])).catch(() => {}); }).catch((e) => setStatus({ connected: false, error: e.code }));
   }, [plan?.title]);
 
   const songs = flattenSongs(plan);
@@ -283,12 +286,14 @@ function SpotifyPlaylistCard({ plan }) {
     if (!songs.length || busy) return;
     setBusy(true); setError(''); setResult(null);
     try {
-      const data = await api.spotifyCreatePlaylist({
-        name: name.trim() || 'DJ Request Live Master Playlist',
-        description: 'AI-planned DJ set created with DJ Request Live',
-        visibility,
-        songs: songs.map(({ title, artist }) => ({ title, artist })),
-      });
+      const data = mode === 'existing'
+        ? await api.spotifyAddToPlaylist({ playlist_id: selectedPlaylist, songs: songs.map(({ title, artist }) => ({ title, artist })) })
+        : await api.spotifyCreatePlaylist({
+            name: name.trim() || 'DJ Request Live Master Playlist',
+            description: 'AI-planned DJ set created with DJ Request Live',
+            visibility,
+            songs: songs.map(({ title, artist }) => ({ title, artist })),
+          });
       setResult(data.playlist);
     } catch (e) {
       setError(e.code === 'spotify_not_configured'
@@ -312,11 +317,19 @@ function SpotifyPlaylistCard({ plan }) {
       {status?.connected ? (
         <>
           <div className="spotify-connected"><span className="spotify-dot" /><b>Spotify connected{status.display_name ? ' · ' + status.display_name : ''}</b></div>
-          <div className="spotify-form">
-            <div className="field"><label htmlFor="spotify-name">Playlist name</label><input id="spotify-name" className="input" maxLength={100} value={name} onChange={e => setName(e.target.value)} /></div>
-            <div className="field"><label htmlFor="spotify-visibility">Playlist type</label><select id="spotify-visibility" className="input" value={visibility} onChange={e => setVisibility(e.target.value)}><option value="private">Private — just me</option><option value="public">Public — share it</option><option value="collaborative">Collaborative — let others add songs</option></select></div>
+          <div className="spotify-mode">
+            <button className="btn btn-ghost btn-sm" aria-pressed={mode === 'new'} onClick={() => setMode('new')}>Create New</button>
+            <button className="btn btn-ghost btn-sm" aria-pressed={mode === 'existing'} onClick={() => setMode('existing')}>Add to Existing</button>
           </div>
-          <button className="btn btn-gold" disabled={busy || !songs.length} onClick={create}>{busy ? 'Creating Spotify playlist…' : '🎵 Create Spotify Playlist →'}</button>
+          {mode === 'new' ? (
+            <div className="spotify-form">
+              <div className="field"><label htmlFor="spotify-name">Playlist name</label><input id="spotify-name" className="input" maxLength={100} value={name} onChange={e => setName(e.target.value)} /></div>
+              <div className="field"><label htmlFor="spotify-visibility">Playlist type</label><select id="spotify-visibility" className="input" value={visibility} onChange={e => setVisibility(e.target.value)}><option value="private">Private — just me</option><option value="public">Public — share it</option><option value="collaborative">Collaborative — let others add songs</option></select></div>
+            </div>
+          ) : (
+            <div className="field"><label htmlFor="spotify-existing">Your Spotify playlists</label><select id="spotify-existing" className="input" value={selectedPlaylist} onChange={e => setSelectedPlaylist(e.target.value)}><option value="">Choose a playlist…</option>{playlists.map(p => <option key={p.id} value={p.id}>{p.name} · {p.tracks} tracks{p.collaborative ? ' · collaborative' : ''}</option>)}</select></div>
+          )}
+          <button className="btn btn-gold" disabled={busy || !songs.length || (mode === 'existing' && !selectedPlaylist)} onClick={create}>{busy ? (mode === 'existing' ? 'Adding to Spotify playlist…' : 'Creating Spotify playlist…') : (mode === 'existing' ? '🎵 Add This Set to Spotify →' : '🎵 Create Spotify Playlist →')}</button>
           {result && <div className="msg ok" style={{ marginTop: 12 }}><b>{result.added} songs added.</b>{result.missing?.length ? ' ' + result.missing.length + ' song' + (result.missing.length === 1 ? '' : 's') + ' could not be matched.' : ' Every song matched.'}{result.url && <> <a href={result.url} target="_blank" rel="noreferrer">Open in Spotify →</a></>}</div>}
           {error && <div className="msg err" style={{ marginTop: 12 }}>{error}</div>}
         </>
