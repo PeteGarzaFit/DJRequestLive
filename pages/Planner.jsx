@@ -143,6 +143,8 @@ function PlanResult({ plan, onRefine, busy }) {
           </div>
         </section>
       )}
+      <SpotifyPlaylistCard plan={plan} />
+
       <section className="playlist-export panel">
         <div className="planner-box-head">
           <div>
@@ -260,6 +262,73 @@ function exportPlaylist(plan, format) {
     const txt = songs.map((s, i) => (i + 1) + '. ' + s.title + ' — ' + s.artist + ' [' + s.phase + ']').join('\n');
     downloadText(base + '-playlist-package.json', JSON.stringify({ source: 'DJ Request Live', title: plan.title || 'Master Playlist', formats: ['m3u','csv','txt','json'], m3u, csv, txt, songs }, null, 2), 'application/json;charset=utf-8');
   }
+}
+
+function SpotifyPlaylistCard({ plan }) {
+  const [status, setStatus] = useState(null);
+  const [name, setName] = useState(() => String(plan?.title || 'DJ Request Live Master Playlist').slice(0, 100));
+  const [visibility, setVisibility] = useState('private');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setName(String(plan?.title || 'DJ Request Live Master Playlist').slice(0, 100));
+    setResult(null); setError('');
+    api.spotifyStatus().then(setStatus).catch((e) => setStatus({ connected: false, error: e.code }));
+  }, [plan?.title]);
+
+  const songs = flattenSongs(plan);
+  async function create() {
+    if (!songs.length || busy) return;
+    setBusy(true); setError(''); setResult(null);
+    try {
+      const data = await api.spotifyCreatePlaylist({
+        name: name.trim() || 'DJ Request Live Master Playlist',
+        description: 'AI-planned DJ set created with DJ Request Live',
+        visibility,
+        songs: songs.map(({ title, artist }) => ({ title, artist })),
+      });
+      setResult(data.playlist);
+    } catch (e) {
+      setError(e.code === 'spotify_not_configured'
+        ? 'Spotify is not configured on the DJ Request Live server yet.'
+        : e.code === 'spotify_api_error' ? 'Spotify could not complete that playlist request. Try again.'
+        : e.code === 'spotify_reconnect_required' ? 'Reconnect Spotify and try again.'
+        : 'Could not create the Spotify playlist.');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <section className="panel spotify-builder">
+      <div className="planner-box-head">
+        <div>
+          <span className="eyebrow">STREAMING PLAYLIST</span>
+          <h2>Send This Set to Spotify</h2>
+          <p className="hint">No filename headaches. DJ Request Live matches the song title and artist to Spotify, then creates the playlist in your account.</p>
+        </div>
+        <span className="result-badge">SPOTIFY</span>
+      </div>
+      {status?.connected ? (
+        <>
+          <div className="spotify-connected"><span className="spotify-dot" /><b>Spotify connected{status.display_name ? ' · ' + status.display_name : ''}</b></div>
+          <div className="spotify-form">
+            <div className="field"><label htmlFor="spotify-name">Playlist name</label><input id="spotify-name" className="input" maxLength={100} value={name} onChange={e => setName(e.target.value)} /></div>
+            <div className="field"><label htmlFor="spotify-visibility">Playlist type</label><select id="spotify-visibility" className="input" value={visibility} onChange={e => setVisibility(e.target.value)}><option value="private">Private — just me</option><option value="public">Public — share it</option><option value="collaborative">Collaborative — let others add songs</option></select></div>
+          </div>
+          <button className="btn btn-gold" disabled={busy || !songs.length} onClick={create}>{busy ? 'Creating Spotify playlist…' : '🎵 Create Spotify Playlist →'}</button>
+          {result && <div className="msg ok" style={{ marginTop: 12 }}><b>{result.added} songs added.</b>{result.missing?.length ? ' ' + result.missing.length + ' song' + (result.missing.length === 1 ? '' : 's') + ' could not be matched.' : ' Every song matched.'}{result.url && <> <a href={result.url} target="_blank" rel="noreferrer">Open in Spotify →</a></>}</div>}
+          {error && <div className="msg err" style={{ marginTop: 12 }}>{error}</div>}
+        </>
+      ) : (
+        <>
+          <p className="hint" style={{ marginBottom: 14 }}>Connect your Spotify account to create playlists directly from your AI-generated set. You can keep them private, publish them, or make them collaborative.</p>
+          <button className="btn btn-gold" onClick={() => { window.location.href = api.spotifyConnectUrl; }}>🎵 Connect Spotify →</button>
+          {status?.error === 'spotify_not_configured' && <p className="hint" style={{ marginTop: 10 }}>Admin setup required: Spotify Client ID and Client Secret.</p>}
+        </>
+      )}
+    </section>
+  );
 }
 
 function ResultCard({ title, children }) {
