@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { hashPassword, verifyPassword, fakeVerify, newToken, tokenHash, parseCookies, limited } from './security.js';
 import OpenAI from 'openai';
 import { AI_PLAN_SYSTEM } from '../lib/aiPlanner.js';
@@ -15,6 +16,45 @@ const SESSION_DAYS = 30;
 const MAX_JSON = 100 * 1024;
 const MAX_IMAGE = 2.5 * 1024 * 1024;
 const HEX = /^#[0-9a-f]{6}$/i;
+
+const SPOTIFY_SCOPES = [
+  'playlist-read-private',
+  'playlist-read-collaborative',
+  'playlist-modify-private',
+  'playlist-modify-public',
+].join(' ');
+
+function spotifyRedirectUri(req) {
+  if (process.env.SPOTIFY_REDIRECT_URI) return process.env.SPOTIFY_REDIRECT_URI;
+  const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  return proto + '://' + host + '/api/spotify/callback';
+}
+
+function spotifyState() {
+  return Buffer.from(crypto.randomBytes(24)).toString('base64url');
+}
+
+async function spotifyToken(db, u) {
+  if (!u?.spotify_access_token) throw bad('spotify_not_connected', 400);
+  let access = u.spotify_access_token;
+  if (Number(u.spotify_expires_at || 0) <= Date.now() + 60000) {
+    if (!u.spotify_refresh_token) throw bad('spotify_reconnect_required', 401);
+    const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: u.spotify_refresh_token, client_id: process.env.SPOTIFY_CLIENT_ID || '' });
+    const auth = Buffer.from((process.env.SPOTIFY_CLIENT_ID || '') + ':' + (process.env.SPOTIFY_CLIENT_SECRET || '')).toString('base64');
+    const r = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { Authorization: 'Basic ' + auth, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.access_token) { console.error('Spotify refresh error', data); throw bad('spotify_reconnect_required', 401); }
+    access = data.access_token;
+    await db.run('UPDATE users SET spotify_access_token = ?, spotify_expires_at = ? WHERE id = ?', [access, Date.now() + Number(data.expires_in || 3600) * 1000, u.id]);
+  }
+  return access;
+}
+
 
 class HttpError extends Error { constructor(status, code) { super(code); this.status = status; this.code = code; } }
 const bad = (code, status = 400) => new HttpError(status, code);
@@ -173,6 +213,98 @@ export function createApp(db) {
           }
         }
         return send(res, 200, { plan }), true;
+      }
+
+      if (path === '/api/spotify/connect' && method === 'GET') {
+        const u = await requireUser(req);
+        if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) throw bad('spotify_not_configured', 503);
+        const state = spotifyState();
+        const cookie = 'rl_spotify_state=' + state + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=600' + (isHttps(req) ? '; Secure' : '');
+        const p = new URLSearchParams({ client_id: process.env.SPOTIFY_CLIENT_ID, response_type: 'code', redirect_uri: spotifyRedirectUri(req), scope: SPOTIFY_SCOPES, state, show_dialog: 'true' });
+        res.writeHead(302, { Location: 'https://accounts.spotify.com/authorize?' + p.toString(), 'Set-Cookie': cookie, 'Cache-Control': 'no-store' });
+        res.end();
+        return true;
+      }
+
+      if (path === '/api/spotify/callback' && method === 'GET') {
+        const state = String(url.searchParams.get('state') || '');
+        const cookies = parseCookies(req.headers.cookie);
+        if (!state || !cookies.rl_spotify_state || state !== cookies.rl_spotify_state) {
+          res.writeHead(302, { Location: '/studio?spotify=error&reason=state', 'Set-Cookie': 'rl_spotify_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' }); res.end(); return true;
+        }
+        const u = await userFromRequest(req);
+        if (!u) { res.writeHead(302, { Location: '/login?spotify=required' }); res.end(); return true; }
+        const code = String(url.searchParams.get('code') || '');
+        if (!code) { res.writeHead(302, { Location: '/studio?spotify=error&reason=denied' }); res.end(); return true; }
+        const body = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: spotifyRedirectUri(req), client_id: process.env.SPOTIFY_CLIENT_ID || '' });
+        const auth = Buffer.from((process.env.SPOTIFY_CLIENT_ID || '') + ':' + (process.env.SPOTIFY_CLIENT_SECRET || '')).toString('base64');
+        const r = await fetch('https://accounts.spotify.com/api/token', { method: 'POST', headers: { Authorization: 'Basic ' + auth, 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.access_token) { console.error('Spotify token error', data); res.writeHead(302, { Location: '/studio?spotify=error&reason=token' }); res.end(); return true; }
+        const meR = await fetch('https://api.spotify.com/v1/me', { headers: { Authorization: 'Bearer ' + data.access_token } });
+        const me = await meR.json().catch(() => ({}));
+        await db.run('UPDATE users SET spotify_access_token = ?, spotify_refresh_token = ?, spotify_expires_at = ?, spotify_account_id = ?, spotify_display_name = ? WHERE id = ?',
+          [data.access_token, data.refresh_token || u.spotify_refresh_token || '', Date.now() + Number(data.expires_in || 3600) * 1000, me.account_id || '', me.display_name || '', u.id]);
+        res.writeHead(302, { Location: '/studio?spotify=connected', 'Set-Cookie': 'rl_spotify_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' }); res.end();
+        return true;
+      }
+
+      if (path === '/api/spotify/status' && method === 'GET') {
+        const u = await requireUser(req);
+        return send(res, 200, { connected: !!u.spotify_refresh_token || !!u.spotify_access_token, display_name: u.spotify_display_name || null }), true;
+      }
+
+      if (path === '/api/spotify/playlists' && method === 'GET') {
+        const u = await requireUser(req);
+        const access = await spotifyToken(db, u);
+        const items = [];
+        let next = 'https://api.spotify.com/v1/me/playlists?limit=50';
+        while (next && items.length < 500) {
+          const r = await fetch(next, { headers: { Authorization: 'Bearer ' + access } });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw bad('spotify_api_error', 502);
+          items.push(...(data.items || []));
+          next = data.next;
+        }
+        return send(res, 200, { playlists: items.map(p => ({ id: p.id, name: p.name, public: p.public, collaborative: p.collaborative, tracks: p.items?.total ?? p.tracks?.total ?? 0, url: p.external_urls?.spotify || null })) }), true;
+      }
+
+      if (path === '/api/spotify/create-playlist' && method === 'POST') {
+        const u = await requireUser(req);
+        const access = await spotifyToken(db, u);
+        const b = await readJson(req);
+        const name = str(b.name, 100, { min: 1 });
+        const description = str(b.description ?? 'Created with DJ Request Live', 300);
+        const visibility = b.visibility === 'private' ? 'private' : b.visibility === 'collaborative' ? 'collaborative' : 'public';
+        const songs = Array.isArray(b.songs) ? b.songs.slice(0, 100) : [];
+        if (!songs.length) throw bad('playlist_empty');
+        const uris = [], missing = [];
+        for (const song of songs) {
+          const title = str(song?.title ?? '', 180, { min: 1 });
+          const artist = str(song?.artist ?? '', 180, { min: 1 });
+          const q = encodeURIComponent('track:' + title + ' artist:' + artist);
+          const r = await fetch('https://api.spotify.com/v1/search?type=track&limit=1&q=' + q, { headers: { Authorization: 'Bearer ' + access } });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw bad('spotify_api_error', 502);
+          const track = data.tracks?.items?.[0];
+          if (track?.uri) uris.push(track.uri); else missing.push({ title, artist });
+        }
+        const cr = await fetch('https://api.spotify.com/v1/me/playlists', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + access, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description, public: visibility === 'public', collaborative: visibility === 'collaborative' }),
+        });
+        const playlist = await cr.json().catch(() => ({}));
+        if (!cr.ok || !playlist.id) throw bad('spotify_api_error', 502);
+        for (let i = 0; i < uris.length; i += 100) {
+          const ar = await fetch('https://api.spotify.com/v1/playlists/' + encodeURIComponent(playlist.id) + '/items', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + access, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uris: uris.slice(i, i + 100) }),
+          });
+          if (!ar.ok) { console.error('Spotify add items error', await ar.text().catch(() => '')); throw bad('spotify_api_error', 502); }
+        }
+        return send(res, 200, { playlist: { id: playlist.id, name: playlist.name, url: playlist.external_urls?.spotify || null, added: uris.length, missing } }), true;
       }
 
       if (path === '/api/health' && method === 'GET') {
