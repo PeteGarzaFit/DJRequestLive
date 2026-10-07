@@ -91,7 +91,7 @@ export default function GuestView({ p, preview = false, paused = false, onSend }
         {paused
           ? <span className="eyebrow">Requests are paused</span>
           : <span className="live"><b />{p.live || 'Taking requests now'}</span>}
-        <h1 className="dj-name">{p.n || 'Your DJ name'}</h1>
+        {p.showName !== undefined ? p.showName !== false && <h1 className="dj-name">{p.n || 'Your DJ name'}</h1> : !p.logo && <h1 className="dj-name">{p.n || 'Your DJ name'}</h1>}
         {p.t && <p className="tagline">{p.t}</p>}
         {(genres.length > 0 || ig) && (
           <div className="chips">
