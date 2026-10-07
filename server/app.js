@@ -125,13 +125,18 @@ export function createApp(db) {
         if (!process.env.OPENAI_API_KEY) throw bad('ai_not_configured', 503);
         const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         const model = process.env.OPENAI_MODEL || 'gpt-6-luna';
+        const library = await db.all(
+          'SELECT title, artist, genre, era, bpm, energy, dancefloor_score, singalong_score, crossgen_score, content, tags FROM songs WHERE active = 1 ORDER BY (dancefloor_score + singalong_score + crossgen_score) DESC, id ASC LIMIT 180'
+        );
+        const libraryText = JSON.stringify(library);
+        const plannerInput = `EVENT:\n${event}\n\nCURATED DJREQUESTLIVE SONG LIBRARY (recommend only exact title/artist pairs from this data):\n${libraryText}`;
         let response;
         try {
           response = await client.responses.create({
             model,
             instructions: AI_PLAN_SYSTEM,
-            input: event,
-            max_output_tokens: 1800,
+            input: plannerInput,
+            max_output_tokens: 3000,
           });
         } catch (e) {
           console.error('AI planner OpenAI error:', {
