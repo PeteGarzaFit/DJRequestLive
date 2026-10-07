@@ -31,6 +31,7 @@ export default function Planner() {
       setError(e.code === 'ai_not_configured'
         ? 'AI is not connected yet. Add OPENAI_API_KEY in Hostinger environment variables.'
         : e.code === 'rate_limited' ? 'Too many planner requests. Try again in a few minutes.'
+        : e.code === 'ai_api_error' ? 'OpenAI API error. Check the Hostinger API key, billing, model access, and deployment logs.'
         : 'The planner could not build that plan. Try a little more event detail.');
     } finally { setBusy(false); }
   }
