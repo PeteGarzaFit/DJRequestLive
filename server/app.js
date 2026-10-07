@@ -129,7 +129,7 @@ export function createApp(db) {
         let library;
         try {
           library = await db.all(
-            'SELECT title, artist, genre, era, bpm, energy, dancefloor_score, singalong_score, crossgen_score, content, tags FROM songs WHERE active = 1 ORDER BY (dancefloor_score + singalong_score + crossgen_score) DESC, id ASC LIMIT 180'
+            'SELECT title, artist, genre, era, bpm, energy, dancefloor_score, singalong_score, crossgen_score, content, tags FROM songs WHERE active = 1 ORDER BY (dancefloor_score + singalong_score + crossgen_score) DESC, id ASC LIMIT 300'
           );
         } catch (e) {
           // Keep the planner usable if an older deployment has not created the songs table yet.
@@ -138,7 +138,7 @@ export function createApp(db) {
             title: s.title, artist: s.artist, genre: s.genre, era: s.era, bpm: s.bpm,
             energy: s.energy, dancefloor_score: s.dancefloor, singalong_score: s.singalong,
             crossgen_score: s.crossgen, content: s.content, tags: s.tags,
-          })).slice(0, 180);
+          })).slice(0, 300);
         }
         const libraryText = JSON.stringify(library);
         const plannerInput = `EVENT:\n${event}\n\nCURATED DJREQUESTLIVE SONG LIBRARY (recommend only exact title/artist pairs from this data):\n${libraryText}`;
