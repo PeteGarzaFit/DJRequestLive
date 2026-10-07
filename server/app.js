@@ -179,6 +179,16 @@ export function createApp(db) {
         }
 
         try {
+          // Never let an empty/old songs table take the planner down. Rehydrate from the
+          // bundled source library before deciding that the planner cannot run.
+          if (library.length < 72) {
+            console.warn('AI planner library below minimum; using bundled song library.', { count: library.length });
+            library = normalizePlannerLibrary(songRows().map((s) => ({
+              title: s.title, artist: s.artist, genre: s.genre, era: s.era, bpm: s.bpm,
+              energy: s.energy, dancefloor_score: s.dancefloor, singalong_score: s.singalong,
+              crossgen_score: s.crossgen, content: s.content, tags: s.tags,
+            })));
+          }
           if (library.length < 72) throw new Error('planner_library_too_small');
           if (!process.env.OPENAI_API_KEY) throw new Error('ai_not_configured');
 
