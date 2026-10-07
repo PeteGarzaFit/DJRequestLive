@@ -33,19 +33,16 @@ function parseTrackLine(line) {
   const raw = line.trim();
   if (!raw) return null;
 
-  // Default VirtualDJ tracklist entries normally begin with a time such as "00:00 - ".
-  const withoutTime = raw.replace(/^\s*\d{1,2}:\d{2}(?::\d{2})?\s*[-|]\s*/, '');
-  const parts = withoutTime.split(/\s+-\s+/);
+  // VirtualDJ macOS history uses: HH:MM : Artist - Title
+  // Ignore date/header/separator lines and only accept a real time-stamped entry.
+  const match = raw.match(/^\s*\d{1,2}:\d{2}\s*:\s*(.+?)\s+-\s+(.+)\s*$/);
+  if (!match) return null;
 
-  if (parts.length >= 2) {
-    return {
-      artist: parts[0].trim(),
-      title: parts.slice(1).join(' - ').trim(),
-      raw
-    };
-  }
-
-  return { artist: null, title: withoutTime, raw };
+  return {
+    artist: match[1].trim(),
+    title: match[2].trim(),
+    raw
+  };
 }
 
 function readLastLine(file) {
