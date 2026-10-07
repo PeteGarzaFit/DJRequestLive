@@ -58,7 +58,8 @@
       ],
       "category": "public.app-category.music",
       "hardenedRuntime": true,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "artifactName": "SI-DJ-Bridge.${ext}"
     },
     "dmg": {
       "title": "SI DJ Bridge"
@@ -74,7 +75,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "artifactName": "SI-DJ-Bridge-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
