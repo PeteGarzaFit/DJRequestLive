@@ -85,7 +85,7 @@ function SIDJCommandCenter({ reqs }) {
     setIntel(null);
   },[reqs,analyze]);
   return (<section className="panel sidj-command">
-    <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE DJ</div><h2 style={{fontSize:20,margin:'3px 0 0'}}>Master Cheat Sheet</h2></div><button className="btn btn-ghost btn-sm" onClick={analyze} disabled={busy}>{busy?'Reading the room…':'Analyze room'}</button></div>
+    <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE DJ</div><h2 style={{fontSize:20,margin:'3px 0 0'}}>SUPER INTELLIGENCE QUE</h2></div><button className="btn btn-ghost btn-sm" onClick={analyze} disabled={busy}>{busy?'Reading the room…':'Analyze room'}</button></div>
     {!reqs.length?<p className="hint">Waiting for crowd signals. Requests, tips and played history will feed SI DJ.</p>:!intel?<p className="hint">SI DJ is reading requests, tips, played history and the curated music intelligence library.</p>:<>
       <div className="sidj-grid"><div className="sidj-card"><b>LIVE SIGNAL</b><strong>{intel.signals.length?intel.signals.map(x=>x.g).join(' · '):'Mixed room'}</strong><span>Request momentum</span></div><div className="sidj-card"><b>TIP SIGNAL</b><strong>{'$'}{intel.paid.toFixed(0)}</strong><span>Paid requests</span></div><div className="sidj-card"><b>REPEAT SIGNAL</b><strong>{intel.repeat?intel.repeat.count+'×':'—'}</strong><span>{intel.repeat?intel.repeat.song:'No repeat request yet'}</span></div></div>
       <div className="sidj-section"><div className="eyebrow">TOP REQUEST SIGNALS</div>{intel.topRequests.map((r)=><div className="sidj-row" key={r.id}><div><strong>{r.song}</strong>{r.artist&&<span>{r.artist}</span>}</div><b>{'$'}{Number(r.tip||0).toFixed(0)}</b></div>)}</div>
