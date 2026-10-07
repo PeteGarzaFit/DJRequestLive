@@ -32,6 +32,17 @@ export async function createDb() {
   });
   const ddl = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8').replace(/^\s*--.*$/gm, '');
   for (const stmt of ddl.split(';').map((s) => s.trim()).filter(Boolean)) await pool.query(stmt);
+  for (const stmt of [
+    'ALTER TABLE users ADD COLUMN spotify_access_token TEXT NULL',
+    'ALTER TABLE users ADD COLUMN spotify_refresh_token TEXT NULL',
+    'ALTER TABLE users ADD COLUMN spotify_expires_at BIGINT NULL',
+    'ALTER TABLE users ADD COLUMN spotify_account_id VARCHAR(120) NULL',
+    'ALTER TABLE users ADD COLUMN spotify_display_name VARCHAR(180) NULL',
+  ]) {
+    try { await pool.query(stmt); } catch (e) {
+      if (!/duplicate column|duplicate field|ER_DUP_FIELDNAME/i.test(String(e?.message || e?.code))) throw e;
+    }
+  }
   await seedSongs({
     all: async (sql, p = []) => { const [rows] = await pool.query(sql, p); return rows; },
     run: async (sql, p = []) => { const [r] = await pool.query(sql, p); return { insertId: Number(r.insertId || 0), changes: Number(r.affectedRows || 0) }; },
