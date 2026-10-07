@@ -2,20 +2,47 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } = require(
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 let win, tray, bridge;
 const PORT = 8765;
 const configDir = path.join(app.getPath('userData'));
 const configPath = path.join(configDir, 'config.json');
 
+function defaultConfig() {
+  return {
+    source: 'virtualdj-history',
+    virtualdjHistory: {
+      historyFile: path.join(os.homedir(), 'Documents', 'VirtualDJ', 'History', 'tracklist.txt')
+    },
+    rekordbox: { historyFile: '' }
+  };
+}
+
 function ensureConfig() {
   fs.mkdirSync(configDir, { recursive: true });
+
   if (!fs.existsSync(configPath)) {
-    fs.writeFileSync(configPath, JSON.stringify({
-      source: 'virtualdj',
-      virtualdj: { baseUrl: 'http://127.0.0.1:80', bearer: '' },
-      rekordbox: { historyFile: '' }
-    }, null, 2));
+    fs.writeFileSync(configPath, JSON.stringify(defaultConfig(), null, 2));
+    return;
+  }
+
+  try {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    // Migrate the unsafe legacy HTTP connector to the file-based connector.
+    if (config.source === 'virtualdj' || config.virtualdj) {
+      const migrated = {
+        source: 'virtualdj-history',
+        virtualdjHistory: {
+          historyFile: config.virtualdjHistory?.historyFile ||
+            path.join(os.homedir(), 'Documents', 'VirtualDJ', 'History', 'tracklist.txt')
+        },
+        rekordbox: config.rekordbox || { historyFile: '' }
+      };
+      fs.writeFileSync(configPath, JSON.stringify(migrated, null, 2));
+    }
+  } catch {
+    fs.writeFileSync(configPath, JSON.stringify(defaultConfig(), null, 2));
   }
 }
 
@@ -41,12 +68,10 @@ function startBridge() {
 
   bridge.stdout.on('data', data => console.log('[Bridge]', data.toString().trim()));
   bridge.stderr.on('data', data => console.error('[Bridge]', data.toString().trim()));
-
   bridge.on('error', err => {
     console.error('[Bridge process error]', err);
     bridge = null;
   });
-
   bridge.on('exit', (code, signal) => {
     console.log('[Bridge exited]', { code, signal });
     bridge = null;
@@ -73,7 +98,6 @@ function createWindow() {
       nodeIntegration: false
     }
   });
-
   win.loadFile(path.join(__dirname, 'index.html'));
   win.on('close', e => {
     if (!app.isQuitting) {
@@ -100,12 +124,7 @@ ipcMain.handle('bridge:status', async () => {
     const r = await fetch('http://127.0.0.1:' + PORT + '/health');
     return await r.json();
   } catch {
-    return {
-      connected: false,
-      source: null,
-      nowPlaying: null,
-      error: 'Bridge offline'
-    };
+    return { connected: false, source: null, nowPlaying: null, error: 'Bridge offline' };
   }
 });
 
