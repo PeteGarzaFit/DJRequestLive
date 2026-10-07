@@ -143,6 +143,37 @@ function PlanResult({ plan, onRefine, busy }) {
           </div>
         </section>
       )}
+      <section className="playlist-export panel">
+        <div className="planner-box-head">
+          <div>
+            <span className="eyebrow">DJ PLAYLIST EXPORT</span>
+            <h2>Take This Set With You</h2>
+            <p className="hint">Export the master playlist for the DJ software and workflow you use.</p>
+          </div>
+          <span className="result-badge">{flattenSongs(plan).length} TRACKS</span>
+        </div>
+        <div className="export-grid">
+          <button className="export-card export-primary" onClick={() => exportPlaylist(plan, 'm3u')}>
+            <strong>⬇ M3U Playlist</strong><span>Universal playlist format</span>
+          </button>
+          <button className="export-card" onClick={() => exportPlaylist(plan, 'rekordbox')}>
+            <strong>Rekordbox XML</strong><span>Playlist metadata export</span>
+          </button>
+          <button className="export-card" onClick={() => exportPlaylist(plan, 'csv')}>
+            <strong>CSV</strong><span>Library + phase + reasons</span>
+          </button>
+          <button className="export-card" onClick={() => exportPlaylist(plan, 'txt')}>
+            <strong>TXT</strong><span>Simple DJ-ready song list</span>
+          </button>
+          <button className="export-card" onClick={() => exportPlaylist(plan, 'json')}>
+            <strong>JSON</strong><span>Full playlist data</span>
+          </button>
+          <button className="export-card export-package" onClick={() => exportPlaylist(plan, 'package')}>
+            <strong>⬇ DJ Playlist Package</strong><span>M3U + CSV + TXT + JSON data</span>
+          </button>
+        </div>
+        <p className="export-note">VirtualDJ, Serato, Traktor and Engine DJ workflows can use interoperable playlist formats such as M3U. Native database/crate formats can be added later without locking DJs into one platform.</p>
+      </section>
       <div className="refine panel">
         <b>Refine the plan</b>
         <div className="refine-row"><input className="input" value={refine} onChange={e => setRefine(e.target.value)} placeholder="Make it 20% more country. Less hip-hop. They're mostly in their 40s." /><button className="btn btn-gold" disabled={!refine.trim() || busy} onClick={() => { onRefine(refine); setRefine(''); }}>Refine →</button></div>
