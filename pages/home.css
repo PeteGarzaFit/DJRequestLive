@@ -94,3 +94,10 @@ html,body{margin:0;background:#050608}
   .mk-foot{justify-content:center;text-align:center}
 }
 @media (prefers-reduced-motion:reduce){.mk *{transition:none!important}}
+@media (max-width:600px){
+  .mk-laptop .dv-dock,.mk-laptop .ds-side,.mk-laptop .ds-no,.mk-laptop .ds-ok,.mk-laptop .ds-live,.mk-laptop .ds-now,.mk-laptop .dv-menubar>*:not(:first-child):not(.dv-notch-cam){display:none}
+  .mk-laptop .ds{grid-template-columns:1fr}
+  .mk-laptop .ds-main{zoom:1.35;padding:1.6cqw 1.8cqw}
+  .mk-laptop .ds-row:nth-of-type(n+5){display:none}
+  .mk-laptop .ds-row{grid-template-columns:3.4cqw 1fr auto}
+}
