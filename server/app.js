@@ -359,7 +359,12 @@ ${JSON.stringify(library)}`;
 
       if (path === '/api/health' && method === 'GET') {
         await db.get('SELECT 1 AS ok');
-        return send(res, 200, { ok: true, service: 'DJ Request Live API', database: db.driver }), true;
+        return send(res, 200, {
+          ok: true,
+          service: 'DJ Request Live API',
+          database: db.driver,
+          planner_version: 'failsafe-2026-10-07'
+        }), true;
       }
 
       if (path === '/api/signup' && method === 'POST') {
