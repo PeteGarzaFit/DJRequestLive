@@ -291,3 +291,21 @@
 .rl.rl-app h1,.rl.rl-app h2,.rl.rl-app h3{font-weight:800;letter-spacing:-.03em}
 .rl.rl-app .btn-gold,.rl.rl-app a.btn-gold{background:linear-gradient(180deg,#4a97ff,#1769e8 55%,#1257d6);color:#fff;box-shadow:0 10px 28px -10px #1769e8}
 .rl.rl-app .brand{font-weight:800;letter-spacing:-.01em}
+
+
+.song-recommendations{margin-top:20px}
+.song-phase-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px}
+.song-phase{border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px;background:rgba(255,255,255,.025)}
+.song-phase-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.song-phase-head h3{margin:0;font-size:18px}
+.song-phase-head span{font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.55}
+.song-phase-reason{margin:8px 0 14px;line-height:1.5;opacity:.7;font-size:13px}
+.song-list{display:grid;gap:8px}
+.song-row{display:grid;grid-template-columns:minmax(0,1fr) 1.1fr;gap:14px;padding:11px 0;border-top:1px solid rgba(255,255,255,.06)}
+.song-row b{display:block;font-size:14px}
+.song-row span{display:block;font-size:12px;opacity:.58;margin-top:3px}
+.song-row small{font-size:11px;line-height:1.4;opacity:.58}
+@media (max-width:760px){
+  .song-phase-grid{grid-template-columns:1fr}
+  .song-row{grid-template-columns:1fr}
+}
