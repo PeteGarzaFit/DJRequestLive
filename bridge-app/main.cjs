@@ -39,7 +39,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 900, height: 620, minWidth: 720, minHeight: 520,
     title: 'SI DJ Bridge',
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false }
   });
   win.loadFile(path.join(__dirname, 'index.html'));
   win.on('close', e => { if (!app.isQuitting) { e.preventDefault(); win.hide(); } });
