@@ -6,26 +6,14 @@ import { URL } from 'node:url';
 
 const PORT = Number(process.env.PORT || 8765);
 const CONFIG_PATH = process.env.DJRL_BRIDGE_CONFIG || path.join(process.cwd(), 'config.json');
-const FETCH_TIMEOUT_MS = 1500;
 
 function cfg() {
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   } catch {
-    return {
-      source: 'virtualdj',
-      virtualdj: { baseUrl: 'http://127.0.0.1:80', bearer: '' }
-    };
+    return { source: 'virtualdj-history', virtualdjHistory: { historyFile: '' }, rekordbox: { historyFile: '' } };
   }
 }
-
-let state = {
-  connected: false,
-  source: null,
-  nowPlaying: null,
-  updatedAt: null,
-  error: 'Starting bridge…'
-};
 
 function out(res, status, body) {
   res.writeHead(status, {
@@ -37,123 +25,118 @@ function out(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-async function q(base, bearer, script) {
-  const u = new URL('/query', base);
-  u.searchParams.set('script', script);
+function defaultVdjHistoryFile() {
+  return path.join(os.homedir(), 'Documents', 'VirtualDJ', 'History', 'tracklist.txt');
+}
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+function parseTrackLine(line) {
+  const raw = line.trim();
+  if (!raw) return null;
 
+  // Default VirtualDJ tracklist entries normally begin with a time such as "00:00 - ".
+  const withoutTime = raw.replace(/^\s*\d{1,2}:\d{2}(?::\d{2})?\s*[-|]\s*/, '');
+  const parts = withoutTime.split(/\s+-\s+/);
+
+  if (parts.length >= 2) {
+    return {
+      artist: parts[0].trim(),
+      title: parts.slice(1).join(' - ').trim(),
+      raw
+    };
+  }
+
+  return { artist: null, title: withoutTime, raw };
+}
+
+function readLastLine(file) {
   try {
-    const r = await fetch(u, {
-      signal: controller.signal,
-      headers: bearer ? { Authorization: 'Bearer ' + bearer } : {}
-    });
-    if (!r.ok) throw Error('VirtualDJ HTTP ' + r.status);
-    return (await r.text()).trim();
-  } catch (e) {
-    if (e?.name === 'AbortError') throw Error('VirtualDJ connection timed out');
-    throw e;
-  } finally {
-    clearTimeout(timer);
+    const stat = fs.statSync(file);
+    if (!stat.isFile() || stat.size === 0) return null;
+
+    const fd = fs.openSync(file, 'r');
+    const size = Math.min(stat.size, 16384);
+    const buffer = Buffer.alloc(size);
+    fs.readSync(fd, buffer, 0, size, Math.max(0, stat.size - size));
+    fs.closeSync(fd);
+
+    const lines = buffer.toString('utf8').split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+    return lines.length ? lines[lines.length - 1] : null;
+  } catch {
+    return null;
   }
 }
 
-async function vdj() {
-  const c = cfg().virtualdj || {};
-  const base = c.baseUrl || 'http://127.0.0.1:80';
+function vdjHistory() {
+  const configured = cfg().virtualdjHistory?.historyFile;
+  const file = configured || defaultVdjHistoryFile();
+  const line = readLastLine(file);
 
-  try {
-    const audible = await q(base, c.bearer || '', 'deck master is_audible');
-
-    if (['false', '0', ''].includes(audible)) {
-      state = {
-        connected: true,
-        source: 'virtualdj',
-        nowPlaying: null,
-        updatedAt: Date.now(),
-        error: null
-      };
-      return;
-    }
-
-    const [artist, title, bpm, key, genre, elapsed] = await Promise.all([
-      q(base, c.bearer || '', 'deck master get_artist'),
-      q(base, c.bearer || '', 'deck master get_title'),
-      q(base, c.bearer || '', 'deck master get_bpm'),
-      q(base, c.bearer || '', 'deck master get_key'),
-      q(base, c.bearer || '', 'deck master get_genre'),
-      q(base, c.bearer || '', 'deck master get_time elapsed')
-    ]);
-
-    state = {
-      connected: true,
-      source: 'virtualdj',
-      nowPlaying: {
-        artist,
-        title,
-        bpm: Number(bpm) || null,
-        key: key || null,
-        genre: genre || null,
-        elapsedMs: Number(elapsed) || null
-      },
-      updatedAt: Date.now(),
-      error: null
-    };
-  } catch (e) {
-    state = {
-      ...state,
+  if (!line) {
+    return {
       connected: false,
-      source: 'virtualdj',
+      source: 'virtualdj-history',
+      nowPlaying: null,
       updatedAt: Date.now(),
-      error: e?.message || 'VirtualDJ connection failed'
+      error: 'Waiting for VirtualDJ History/tracklist.txt'
     };
   }
+
+  const track = parseTrackLine(line);
+  return {
+    connected: !!track,
+    source: 'virtualdj-history',
+    nowPlaying: track ? { ...track, source: 'virtualdj-history' } : null,
+    updatedAt: Date.now(),
+    error: track ? null : 'Unable to parse VirtualDJ tracklist'
+  };
 }
 
-function rb() {
-  const f = cfg().rekordbox?.historyFile;
-  if (!f) return null;
+function rekordbox() {
+  const file = cfg().rekordbox?.historyFile;
+  if (!file) return null;
 
   try {
-    const line = fs.readFileSync(f, 'utf8')
-      .split(/\r?\n/)
-      .map(x => x.trim())
-      .filter(Boolean)
-      .pop();
-
+    const line = readLastLine(file);
     if (!line) return null;
-
     const parts = line.split(/\t|,/).map(x => x.trim());
     return parts.length >= 2
-      ? { artist: parts[0], title: parts[1], source: 'rekordbox-history' }
+      ? { artist: parts[0], title: parts[1], source: 'rekordbox-history', raw: line }
       : null;
   } catch {
     return null;
   }
 }
 
-async function poll() {
+let state = {
+  connected: false,
+  source: null,
+  nowPlaying: null,
+  updatedAt: Date.now(),
+  error: 'Starting bridge…'
+};
+
+function poll() {
   try {
     const c = cfg();
 
     if (c.source === 'rekordbox-history') {
-      const nowPlaying = rb();
+      const track = rekordbox();
       state = {
-        connected: !!nowPlaying,
+        connected: !!track,
         source: 'rekordbox-history',
-        nowPlaying,
+        nowPlaying: track,
         updatedAt: Date.now(),
-        error: nowPlaying ? null : 'Waiting for Rekordbox history file'
+        error: track ? null : 'Waiting for Rekordbox history file'
       };
       return;
     }
 
-    await vdj();
+    state = vdjHistory();
   } catch (e) {
     state = {
-      ...state,
       connected: false,
+      source: 'virtualdj-history',
+      nowPlaying: null,
       updatedAt: Date.now(),
       error: e?.message || 'Bridge polling failed'
     };
@@ -172,15 +155,14 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
-  if (u.pathname === '/health' || u.pathname === '/now-playing') {
-    return out(res, 200, state);
-  }
+  if (u.pathname === '/health' || u.pathname === '/now-playing') return out(res, 200, state);
 
   if (u.pathname === '/config') {
     return out(res, 200, {
-      source: cfg().source || 'virtualdj',
+      source: cfg().source || 'virtualdj-history',
       port: PORT,
-      host: os.hostname()
+      host: os.hostname(),
+      virtualdjHistoryFile: cfg().virtualdjHistory?.historyFile || defaultVdjHistoryFile()
     });
   }
 
