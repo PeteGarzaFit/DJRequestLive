@@ -5,25 +5,102 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#05070b">
 <meta name="description" content="SI DJ — Super Intelligence DJ. Build your crate. Read your crowd. Own your set.">
+<meta property="og:title" content="SI DJ — Super Intelligence DJ">
+<meta property="og:description" content="Build your crate. Read your crowd. Own your set.">
+<meta property="og:type" content="website">
 <title>SI DJ — Super Intelligence DJ</title>
 <style>
-:root{--bg:#05070b;--blue:#1769e8;--text:#f5f7fb;--muted:#8993a6}
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
-body{overflow:hidden}.noise{position:fixed;inset:0;opacity:.045;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E")}
-.grid{position:fixed;inset:-20%;background-image:linear-gradient(rgba(23,105,232,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(23,105,232,.06) 1px,transparent 1px);background-size:70px 70px;transform:perspective(700px) rotateX(64deg) translateY(30%);transform-origin:center;mask-image:linear-gradient(to bottom,transparent 5%,black 55%,transparent 100%);animation:grid 18s linear infinite}
-@keyframes grid{to{background-position:0 70px,70px 0}}.orb{position:fixed;width:520px;height:520px;border-radius:50%;left:50%;top:42%;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(23,105,232,.22),rgba(23,105,232,.07) 30%,transparent 68%);filter:blur(10px);animation:pulse 5s ease-in-out infinite}
-@keyframes pulse{50%{transform:translate(-50%,-50%) scale(1.12);opacity:.7}}.wrap{position:relative;z-index:2;min-height:100vh;display:flex;flex-direction:column}
-nav{height:82px;padding:0 6vw;display:flex;align-items:center;justify-content:space-between}.brand{font-weight:800;letter-spacing:-.04em;font-size:20px}.brand span{color:var(--blue)}.status{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#647087}
-main{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:40px 24px 100px}.content{max-width:900px}.kicker{display:inline-flex;align-items:center;gap:9px;border:1px solid rgba(23,105,232,.35);background:rgba(23,105,232,.07);border-radius:999px;padding:9px 14px;color:#8db8ff;font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;box-shadow:0 0 40px rgba(23,105,232,.08)}
+:root{--bg:#05070b;--panel:#0a0f18;--blue:#1769e8;--text:#f5f7fb;--muted:#8993a6;--line:rgba(255,255,255,.09)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 24%,rgba(23,105,232,.12),transparent 34%);z-index:0}
+.noise{position:fixed;inset:0;opacity:.035;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");z-index:5}
+.grid{position:fixed;inset:-20%;pointer-events:none;background-image:linear-gradient(rgba(23,105,232,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(23,105,232,.05) 1px,transparent 1px);background-size:70px 70px;transform:perspective(700px) rotateX(64deg) translateY(30%);transform-origin:center;mask-image:linear-gradient(to bottom,transparent 5%,black 55%,transparent 100%);animation:grid 18s linear infinite;z-index:0}
+@keyframes grid{to{background-position:0 70px,70px 0}}
+.wrap{position:relative;z-index:2}.container{width:min(1180px,calc(100% - 48px));margin:auto}
+nav{height:82px;display:flex;align-items:center;justify-content:space-between}.brand{font-weight:800;letter-spacing:-.05em;font-size:20px}.brand span{color:var(--blue)}.status{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#647087}
+.hero{min-height:calc(100vh - 82px);display:flex;align-items:center;justify-content:center;text-align:center;padding:55px 0 105px;position:relative}
+.heroGlow{position:absolute;width:620px;height:620px;border-radius:50%;left:50%;top:48%;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(23,105,232,.19),rgba(23,105,232,.05) 34%,transparent 68%);filter:blur(12px);animation:pulse 5s ease-in-out infinite;z-index:-1}
+@keyframes pulse{50%{transform:translate(-50%,-50%) scale(1.1);opacity:.72}}
+.kicker{display:inline-flex;align-items:center;gap:9px;border:1px solid rgba(23,105,232,.35);background:rgba(23,105,232,.07);border-radius:999px;padding:9px 14px;color:#8db8ff;font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;box-shadow:0 0 40px rgba(23,105,232,.08)}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--blue);box-shadow:0 0 16px var(--blue);animation:blink 1.6s ease-in-out infinite}@keyframes blink{50%{opacity:.3}}
-h1{font-size:clamp(72px,12vw,154px);line-height:.8;letter-spacing:-.075em;margin:36px 0 24px;font-weight:850}h1 .si{display:block}.blue{color:var(--blue);text-shadow:0 0 70px rgba(23,105,232,.22)}
+h1{font-size:clamp(76px,13vw,164px);line-height:.8;letter-spacing:-.08em;margin:38px 0 28px;font-weight:850}.blue{color:var(--blue);text-shadow:0 0 70px rgba(23,105,232,.22)}
 .sub{font-size:clamp(20px,2.5vw,30px);font-weight:600;letter-spacing:-.035em;margin:0 auto 18px}.tag{font-size:clamp(17px,2vw,22px);color:var(--muted);margin:0 auto;letter-spacing:-.015em}.tag strong{color:#dce2ed;font-weight:600}
-.tease{margin:46px auto 0;display:flex;justify-content:center;gap:10px;flex-wrap:wrap}.pill{padding:12px 16px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025);border-radius:12px;color:#9da7b8;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
-footer{position:absolute;bottom:28px;left:0;right:0;text-align:center;color:#4d5666;font-size:11px;letter-spacing:.16em;text-transform:uppercase}
-@media(max-width:600px){nav{height:68px;padding:0 22px}.status{font-size:9px}main{padding-bottom:90px}.tease{margin-top:32px}.pill{padding:10px 12px;font-size:10px}}
+.pills{margin:46px auto 0;display:flex;justify-content:center;gap:10px;flex-wrap:wrap}.pill{padding:12px 16px;border:1px solid var(--line);background:rgba(255,255,255,.025);border-radius:12px;color:#9da7b8;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.scroll{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);color:#4d5666;font-size:10px;letter-spacing:.18em;text-transform:uppercase}
+section{padding:110px 0}.sectionLabel{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#6286bc;margin-bottom:18px}.sectionTitle{font-size:clamp(38px,5vw,66px);line-height:.98;letter-spacing:-.055em;max-width:760px;margin:0 0 22px}.sectionCopy{color:var(--muted);font-size:18px;line-height:1.6;max-width:690px}
+.intro{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:48px}.card{min-height:250px;padding:28px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.012));position:relative;overflow:hidden}.card:after{content:"";position:absolute;width:180px;height:180px;right:-100px;top:-100px;border-radius:50%;background:rgba(23,105,232,.12);filter:blur(20px)}.num{font-size:11px;letter-spacing:.15em;color:#587db5}.card h3{font-size:25px;letter-spacing:-.035em;margin:70px 0 10px}.card p{color:var(--muted);line-height:1.55;margin:0}
+.flow{display:grid;grid-template-columns:1fr 1fr;gap:70px;align-items:center}.steps{display:grid;gap:12px;margin-top:35px}.step{display:grid;grid-template-columns:42px 1fr;gap:16px;padding:18px 0;border-top:1px solid var(--line)}.stepNo{font-size:11px;color:#5f86c0;letter-spacing:.12em}.step h4{margin:0 0 5px;font-size:18px}.step p{margin:0;color:var(--muted);line-height:1.5}
+.signal{border:1px solid rgba(23,105,232,.25);border-radius:28px;padding:34px;background:linear-gradient(145deg,rgba(23,105,232,.09),rgba(255,255,255,.015));min-height:390px;display:flex;flex-direction:column;justify-content:space-between}.signalTop{display:flex;justify-content:space-between;align-items:center}.signalBadge{font-size:10px;letter-spacing:.18em;color:#8db8ff;text-transform:uppercase}.bars{display:grid;gap:10px}.bar{display:grid;grid-template-columns:105px 1fr 40px;gap:12px;align-items:center;font-size:11px;color:#8f99aa}.track{height:7px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}.fill{height:100%;width:var(--w);background:linear-gradient(90deg,#1769e8,#5c9aff);border-radius:99px}.value{color:#dbe4f3;text-align:right}
+.final{text-align:center;border-top:1px solid var(--line);padding-bottom:120px}.final .sectionTitle{margin-left:auto;margin-right:auto}.coming{display:inline-block;margin-top:28px;padding:14px 20px;border:1px solid rgba(23,105,232,.35);border-radius:999px;color:#8db8ff;font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase}
+footer{text-align:center;padding:0 0 32px;color:#4d5666;font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+@media(max-width:800px){.container{width:min(100% - 34px,1180px)}nav{height:70px}.cards{grid-template-columns:1fr}.flow{grid-template-columns:1fr;gap:35px}.signal{min-height:320px}section{padding:82px 0}.hero{min-height:calc(100vh - 70px);padding-top:30px}.scroll{display:none}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.grid,.heroGlow,.dot{animation:none}}
 </style>
 </head>
-<body><div class="grid"></div><div class="orb"></div><div class="noise"></div><div class="wrap">
+<body>
+<div class="grid"></div><div class="noise"></div>
+<div class="wrap">
+<div class="container">
 <nav><div class="brand">SI<span>DJ</span></div><div class="status">SYSTEM INITIALIZING</div></nav>
-<main><section class="content"><div class="kicker"><i class="dot"></i> SUPER INTELLIGENCE DJ</div><h1><span class="si">SI<span class="blue">DJ</span></span></h1><p class="sub">The next generation of DJ intelligence is coming.</p><p class="tag"><strong>Build your crate.</strong>&nbsp; Read your crowd. &nbsp;<strong>Own your set.</strong></p><div class="tease"><span class="pill">Music Intelligence</span><span class="pill">Crowd Intelligence</span><span class="pill">Set Intelligence</span></div></section></main>
-<footer>SIDJ.LIVE&nbsp;&nbsp; • &nbsp;&nbsp;COMING SOON</footer></div></body></html>
+
+<header class="hero">
+<div class="heroGlow"></div>
+<div>
+<div class="kicker"><i class="dot"></i> SUPER INTELLIGENCE DJ</div>
+<h1>SI<span class="blue">DJ</span></h1>
+<p class="sub">The next generation of DJ intelligence is coming.</p>
+<p class="tag"><strong>Build your crate.</strong>&nbsp; Read your crowd. &nbsp;<strong>Own your set.</strong></p>
+<div class="pills"><span class="pill">Music Intelligence</span><span class="pill">Crowd Intelligence</span><span class="pill">Set Intelligence</span></div>
+</div>
+<div class="scroll">Scroll to initialize</div>
+</header>
+
+<section class="intro">
+<div class="sectionLabel">Not another playlist generator</div>
+<h2 class="sectionTitle">A second brain for the DJ behind the decks.</h2>
+<p class="sectionCopy">SI DJ combines music knowledge, event context, crowd signals and set strategy to help DJs make better decisions before the first track and while the room is moving.</p>
+<div class="cards">
+<article class="card"><div class="num">01 / MUSIC</div><h3>Build the crate.</h3><p>Find the right records for the room, the era, the energy and the moment — then turn them into a usable DJ-ready crate.</p></article>
+<article class="card"><div class="num">02 / CROWD</div><h3>Read the room.</h3><p>Requests, votes, trends and live signals become intelligence instead of noise, giving the DJ a clearer picture of what the crowd wants.</p></article>
+<article class="card"><div class="num">03 / SET</div><h3>Own the set.</h3><p>Plan energy, transitions and moments without surrendering control. SI DJ advises. The DJ decides.</p></article>
+</div>
+</section>
+
+<section>
+<div class="flow">
+<div>
+<div class="sectionLabel">The intelligence loop</div>
+<h2 class="sectionTitle">Before. During. After.</h2>
+<p class="sectionCopy">SI DJ is designed around the way working DJs actually perform — preparation creates options, the crowd creates signals, and the DJ makes the call.</p>
+<div class="steps">
+<div class="step"><div class="stepNo">01</div><div><h4>Prepare</h4><p>Build the event profile, define the room and generate a strategic crate.</p></div></div>
+<div class="step"><div class="stepNo">02</div><div><h4>Perform</h4><p>Use live crowd intelligence alongside your existing DJ workflow.</p></div></div>
+<div class="step"><div class="stepNo">03</div><div><h4>Adapt</h4><p>React to what is actually happening instead of what you expected to happen.</p></div></div>
+</div>
+</div>
+<div class="signal">
+<div class="signalTop"><span class="signalBadge">Live intelligence</span><span class="signalBadge">DJ control</span></div>
+<div class="bars">
+<div class="bar"><span>Dancefloor</span><div class="track"><div class="fill" style="--w:88%"></div></div><span class="value">88</span></div>
+<div class="bar"><span>Singalong</span><div class="track"><div class="fill" style="--w:72%"></div></div><span class="value">72</span></div>
+<div class="bar"><span>Country</span><div class="track"><div class="fill" style="--w:64%"></div></div><span class="value">64</span></div>
+<div class="bar"><span>Requests</span><div class="track"><div class="fill" style="--w:81%"></div></div><span class="value">81</span></div>
+</div>
+<div><span class="signalBadge">THE DJ HAS FINAL SAY</span></div>
+</div>
+</div>
+</section>
+
+<section class="final">
+<div class="sectionLabel">The next generation</div>
+<h2 class="sectionTitle">Super Intelligence DJ.</h2>
+<p class="sectionCopy" style="margin-left:auto;margin-right:auto">The intelligence layer for modern DJs is being built now.</p>
+<div class="coming">Coming Soon · SIDJ.LIVE</div>
+</section>
+
+<footer>SIDJ.LIVE&nbsp;&nbsp; • &nbsp;&nbsp;SUPER INTELLIGENCE DJ</footer>
+</div>
+</div>
+</body>
+</html>
