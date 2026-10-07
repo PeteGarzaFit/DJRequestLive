@@ -429,6 +429,7 @@ ${JSON.stringify(library)}`;
         if (typeof d.fb === 'string' && d.fb.trim()) { design.fb = str(d.fb, 200); if (!/^https?:\/\//i.test(design.fb) && !/^[A-Za-z0-9._-]+$/.test(design.fb.replace(/^@/, ''))) throw bad('invalid_field'); }
         if (typeof d.tips === 'string' && d.tips.trim()) { design.tips = str(d.tips, 30); if (!/^[\d.,\s]+$/.test(design.tips)) throw bad('invalid_field'); }
         if (d.ls !== undefined) { const logoSize = Number(d.ls); if (!Number.isFinite(logoSize) || logoSize < 140 || logoSize > 420) throw bad('invalid_field'); design.ls = Math.round(logoSize); }
+        if (d.pls !== undefined) { const posterLogoSize = Number(d.pls); if (!Number.isFinite(posterLogoSize) || posterLogoSize < 400 || posterLogoSize > 900) throw bad('invalid_field'); design.pls = Math.round(posterLogoSize); }
         if (d.showName !== undefined) design.showName = d.showName !== false;
         const minTip = Math.round(num(b.min_tip) * 100) / 100;
         if (minTip < 0 || minTip > 10000) throw bad('invalid_field');
