@@ -73,6 +73,28 @@ CREATE TABLE IF NOT EXISTS requests (
   INDEX idx_requests_user_created (user_id, created_at)
 ) CHARACTER SET utf8mb4;
 
+-- Curated DJ hit library used by Music Intelligence.
+CREATE TABLE IF NOT EXISTS songs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(180) NOT NULL,
+  artist VARCHAR(180) NOT NULL,
+  genre VARCHAR(60) NOT NULL,
+  era VARCHAR(20) NOT NULL,
+  bpm DECIMAL(6,2) NULL,
+  energy TINYINT NOT NULL DEFAULT 5,
+  dancefloor_score TINYINT NOT NULL DEFAULT 5,
+  singalong_score TINYINT NOT NULL DEFAULT 5,
+  crossgen_score TINYINT NOT NULL DEFAULT 5,
+  content VARCHAR(20) NOT NULL DEFAULT 'Clean',
+  tags VARCHAR(500) NOT NULL DEFAULT '',
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_song (title, artist),
+  INDEX idx_songs_genre (genre),
+  INDEX idx_songs_era (era),
+  INDEX idx_songs_active (active)
+) CHARACTER SET utf8mb4;
+
 -- Reserved for Stripe boosts and subscriptions later.
 CREATE TABLE IF NOT EXISTS payments (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
