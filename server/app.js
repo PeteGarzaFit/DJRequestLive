@@ -1,6 +1,7 @@
 import { hashPassword, verifyPassword, fakeVerify, newToken, tokenHash, parseCookies, limited } from './security.js';
 import OpenAI from 'openai';
 import { AI_PLAN_SYSTEM } from '../lib/aiPlanner.js';
+import { songRows } from '../lib/songLibrary.js';
 
 const RESERVED = ['studio', 'login', 'signup', 'dashboard', 'api', 'admin', 'assets', 'media', 'privacy', 'terms', 'help', 'index', 'app', 'www'];
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{2,29}$/;
@@ -125,9 +126,20 @@ export function createApp(db) {
         if (!process.env.OPENAI_API_KEY) throw bad('ai_not_configured', 503);
         const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         const model = process.env.OPENAI_MODEL || 'gpt-6-luna';
-        const library = await db.all(
-          'SELECT title, artist, genre, era, bpm, energy, dancefloor_score, singalong_score, crossgen_score, content, tags FROM songs WHERE active = 1 ORDER BY (dancefloor_score + singalong_score + crossgen_score) DESC, id ASC LIMIT 180'
-        );
+        let library;
+        try {
+          library = await db.all(
+            'SELECT title, artist, genre, era, bpm, energy, dancefloor_score, singalong_score, crossgen_score, content, tags FROM songs WHERE active = 1 ORDER BY (dancefloor_score + singalong_score + crossgen_score) DESC, id ASC LIMIT 180'
+          );
+        } catch (e) {
+          // Keep the planner usable if an older deployment has not created the songs table yet.
+          console.error('AI planner library DB error:', { code: e?.code, message: e?.message });
+          library = songRows().map((s) => ({
+            title: s.title, artist: s.artist, genre: s.genre, era: s.era, bpm: s.bpm,
+            energy: s.energy, dancefloor_score: s.dancefloor, singalong_score: s.singalong,
+            crossgen_score: s.crossgen, content: s.content, tags: s.tags,
+          })).slice(0, 180);
+        }
         const libraryText = JSON.stringify(library);
         const plannerInput = `EVENT:\n${event}\n\nCURATED DJREQUESTLIVE SONG LIBRARY (recommend only exact title/artist pairs from this data):\n${libraryText}`;
         let response;
