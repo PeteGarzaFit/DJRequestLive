@@ -285,3 +285,9 @@
   .planner-actions{flex-direction:column}
   .planner-actions .btn{width:100%}
 }
+
+/* Studio + sign-in use the DJ Request Live brand blue (guest pages keep each DJ's own theme) */
+.rl.rl-app{--ink:#06080c;--stage:#0b0f15;--deck:#0e131b;--line:#1d2530;--fg:#f4f6fa;--muted:#8f98a6;--gold:#4a97ff;--gold-deep:#1257d6;--glow:#1769e8;--display:Inter,system-ui,sans-serif;--body:Inter,system-ui,sans-serif}
+.rl.rl-app h1,.rl.rl-app h2,.rl.rl-app h3{font-weight:800;letter-spacing:-.03em}
+.rl.rl-app .btn-gold,.rl.rl-app a.btn-gold{background:linear-gradient(180deg,#4a97ff,#1769e8 55%,#1257d6);color:#fff;box-shadow:0 10px 28px -10px #1769e8}
+.rl.rl-app .brand{font-weight:800;letter-spacing:-.01em}

@@ -38,9 +38,9 @@ export default function Auth({ mode }) {
   }
 
   return (
-    <div className="rl">
+    <div className="rl rl-app">
       <div className="wrap">
-        <div className="bar"><Link to="/" className="back">← Home</Link><div className="brand"><Mark size={22} color="#f4eff8" accent="#e9bb5f" />DJ Request Live</div></div>
+        <div className="bar"><Link to="/" className="back">← Home</Link><div className="brand"><Mark size={26} badge />DJ Request Live</div></div>
         <form className="panel authcard" onSubmit={submit}>
           <h1 style={{ fontSize: 24 }}>{signup ? 'Create your DJ page' : 'Welcome back'}</h1>
           <p className="hint" style={{ marginTop: -6 }}>{signup ? 'Takes about two minutes. Free to start.' : 'Log in to your studio.'}</p>
