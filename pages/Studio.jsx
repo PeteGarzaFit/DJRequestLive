@@ -161,7 +161,7 @@ function SIDJCommandCenter({ reqs }) {
   },[reqs,nowPlaying,analyze]);
 
   const connected=!!nowPlaying?.connected && !!nowPlaying?.nowPlaying;
-  return (<section className="panel sidj-command">
+  <SIDJLiveLinkSetup />\n  return (<section className="panel sidj-command">
     <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE DJ</div></div><button className="btn btn-ghost btn-sm" onClick={analyze} disabled={busy}>{busy?'Reading the room…':'Analyze room'}</button></div>
     <div className="sidj-live-link"><span className={connected?'dot on':'dot'}></span><div><b>{connected?'SI DJ LIVE LINK · CONNECTED':'SI DJ LIVE LINK · NOT CONNECTED'}</b><small>{connected ? ((nowPlaying.source||'DJ software')+' · live track feed') : 'Run the local DJ Request Live Bridge on the DJ computer'}</small></div></div>
     {connected && <div className="sidj-now"><div className="eyebrow">NOW PLAYING</div><strong>{nowPlaying.nowPlaying.title}</strong><span>{nowPlaying.nowPlaying.artist}{nowPlaying.nowPlaying.bpm?' · '+nowPlaying.nowPlaying.bpm+' BPM':''}{nowPlaying.nowPlaying.key?' · '+nowPlaying.nowPlaying.key:''}</span></div>}
