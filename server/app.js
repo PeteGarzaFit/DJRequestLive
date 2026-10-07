@@ -150,7 +150,16 @@ export function createApp(db) {
         const raw = String(response.output_text || '').trim().replace(/^\`\`\`json\s*/i, '').replace(/\s*\`\`\`$/i, '');
         let plan;
         try { plan = JSON.parse(raw); } catch { console.error('AI planner invalid JSON:', raw.slice(0, 500)); throw bad('ai_bad_response', 502); }
-        if (!plan || typeof plan !== 'object' || !Array.isArray(plan.music_mix) || !Array.isArray(plan.timeline)) throw bad('ai_bad_response', 502);
+        if (!plan || typeof plan !== 'object' || !Array.isArray(plan.music_mix) || !Array.isArray(plan.timeline) || !Array.isArray(plan.recommendations)) throw bad('ai_bad_response', 502);
+        const allowed = new Set(library.map((s) => `${s.title}\\u0000${s.artist}`));
+        for (const group of plan.recommendations) {
+          for (const song of (group?.songs || [])) {
+            if (!allowed.has(`${song?.title}\\u0000${song?.artist}`)) {
+              console.error('AI planner recommended song outside curated library:', song);
+              throw bad('ai_bad_response', 502);
+            }
+          }
+        }
         return send(res, 200, { plan }), true;
       }
 
