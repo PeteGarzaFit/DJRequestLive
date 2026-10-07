@@ -9,7 +9,7 @@ import GuestView from '../components/GuestView.jsx';
 import { Mark } from '../components/Logo.jsx';
 import Planner from './Planner.jsx';
 
-const TABS = [['queue', 'SUPER INTELLIGENCE QUE'], ['planner', 'AI Planner'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
+const TABS = [['queue', 'SI QUE'], ['planner', 'AI Planner'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
 const FILTERS = [['new', 'New'], ['approved', 'Approved'], ['played', 'Played'], ['declined', 'Declined']];
 const ORIGIN = () => window.location.origin;
 
@@ -110,7 +110,7 @@ function QueueTab({ goTab }) {
   const cutoff = Date.now() - 12 * 3600 * 1000; const recent = reqs.filter((r) => r.created_at > cutoff);
   const confirmed = recent.filter((r) => r.paid).reduce((s, r) => s + r.tip, 0); const pending = recent.filter((r) => !r.paid && r.status !== 'declined').reduce((s, r) => s + r.tip, 0);
   const counts = { new: 0, approved: 0, played: 0, declined: 0 }; reqs.forEach((r) => { counts[r.status] += 1; }); const list = reqs.filter((r) => r.status === qf); if (qf === 'new') list.sort((a, b) => b.tip - a.tip || a.created_at - b.created_at);
-  return (<><div className="stats"><div className="stat"><b>{counts.new}</b><span>Waiting</span></div><div className="stat"><b style={{ color: 'var(--ok)' }}>{money(confirmed)}</b><span>Paid 12h</span></div><div className="stat"><b>{money(pending)}</b><span>To confirm</span></div></div>
+  return (<><SIDJCommandCenter reqs={reqs} /><div className="stats"><div className="stat"><b>{counts.new}</b><span>Waiting</span></div><div className="stat"><b style={{ color: 'var(--ok)' }}>{money(confirmed)}</b><span>Paid 12h</span></div><div className="stat"><b>{money(pending)}</b><span>To confirm</span></div></div>
     <div className="qf">{FILTERS.map(([k, l]) => <button key={k} aria-pressed={qf === k} onClick={() => setQf(k)}>{l} ({counts[k]})</button>)}</div>
     <div className="queue">{list.length ? list.map((r) => { const m = PAY.find((x) => x.k === r.method); return (<article key={r.id} className={'req' + (fresh.has(r.id) ? ' fresh' : '')} data-id={r.id}>
       <div className="req-top"><div className="req-song"><strong>{r.song}</strong>{r.artist && <span>{r.artist}</span>}</div><div className={'tip' + (r.paid ? ' paid' : '')}>{money(r.tip)}<small>{r.paid ? 'paid' : m ? 'via ' + m.name : 'tip'}</small></div></div>
