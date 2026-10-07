@@ -19,7 +19,8 @@
     "qrcode": "^1.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.9.4"
+    "react-router-dom": "^7.9.4",
+    "openai": "^6.26.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
