@@ -263,6 +263,10 @@ function DesignTab({ dj, edit, saved, mergeMedia, goTab }) {
           <div className="field"><label htmlFor="d-a">Accent color</label><div className="colorin"><input type="color" id="d-a" value={A} onChange={(e) => setD({ a: e.target.value })} /><span className="hint">Buttons, highlights</span></div></div>
           <div className="field"><label htmlFor="d-gl">Glow color</label><div className="colorin"><input type="color" id="d-gl" value={G} onChange={(e) => setD({ gl: e.target.value })} /><span className="hint">Background light</span></div></div>
         </div>
+        <div className="field"><label htmlFor="d-show-name">Show DJ name text</label>
+          <label className="switch-row"><input id="d-show-name" type="checkbox" checked={d.showName !== false} onChange={(e) => setD({ showName: e.target.checked })} /><span>Show the DJ name below the logo</span></label>
+          <span className="hint">Turn this off if your logo already includes your DJ name.</span>
+        </div>
         <div className="field"><label htmlFor="d-ls">Logo size</label>
           <div className="logo-size-control"><input type="range" id="d-ls" min="140" max="420" step="10" value={Math.max(140, Math.min(420, Number(d.ls) || 220))} onChange={(e) => setD({ ls: Number(e.target.value) })} /><output>{Math.max(140, Math.min(420, Number(d.ls) || 220))} px</output></div>
           <span className="hint">Resize your logo on the guest page. Use a transparent PNG for the cleanest result.</span>
@@ -352,12 +356,15 @@ function ShareTab({ dj }) {
       } catch { /* poster still works if the logo cannot be loaded */ }
     }
 
+    const showName = dj.showName !== undefined ? dj.showName !== false : !dj.logo;
     let size = 112; const name = (dj.name || '').toUpperCase();
-    const nameY = Math.max(390, 175 + logoHeight + 85);
-    do { x.font = `800 ${size}px ${dispFont}`; size -= 4; } while (x.measureText(name).width > W - 140 && size > 40);
-    x.fillStyle = '#f4eff8'; x.fillText(name, W / 2, nameY);
+    const nameY = showName ? Math.max(390, 175 + logoHeight + 85) : Math.max(330, 175 + logoHeight + 45);
+    if (showName) {
+      do { x.font = `800 ${size}px ${dispFont}`; size -= 4; } while (x.measureText(name).width > W - 140 && size > 40);
+      x.fillStyle = '#f4eff8'; x.fillText(name, W / 2, nameY);
+    }
 
-    const q = 620; const qx = (W - q) / 2; const qy = nameY + 105;
+    const q = 620; const qx = (W - q) / 2; const qy = showName ? nameY + 105 : nameY + 55;
     x.fillStyle = '#fbf7ef'; x.beginPath(); x.roundRect(qx - 38, qy - 38, q + 76, q + 76, 46); x.fill();
     x.imageSmoothingEnabled = false; x.drawImage(qr, qx, qy, q, q);
     x.fillStyle = '#f4eff8'; x.font = '600 36px "Manrope", system-ui, sans-serif';
