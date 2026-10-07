@@ -86,7 +86,7 @@ export default function GuestView({ p, preview = false, paused = false, onSend }
       {!preview && <div className="bar"><div className="brand"><i />DJ Request Live</div><span className="eyebrow">Song requests</span></div>}
       <section className="hero">
         {p.logo
-          ? <img className="logo" src={p.logo} alt={`${p.n} logo`} style={{ maxWidth: `${Math.max(140, Math.min(420, Number(p.ls) || 220))}px` }} />
+          ? <img className="logo" src={p.logo} alt={`${p.n} logo`} style={{ width: `${Math.max(140, Math.min(420, Number(p.ls) || 220))}px`, maxWidth: '80vw' }} />
           : vinylOn && <div className="vinyl spin" aria-hidden="true"><div className="label">{(p.lb || '').trim().slice(0, 3) || initials(p.n)}</div></div>}
         {paused
           ? <span className="eyebrow">Requests are paused</span>
