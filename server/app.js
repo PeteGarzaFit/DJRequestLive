@@ -1,4 +1,6 @@
 import { hashPassword, verifyPassword, fakeVerify, newToken, tokenHash, parseCookies, limited } from './security.js';
+import OpenAI from 'openai';
+import { AI_PLAN_SYSTEM } from '../lib/aiPlanner.js';
 
 const RESERVED = ['studio', 'login', 'signup', 'dashboard', 'api', 'admin', 'assets', 'media', 'privacy', 'terms', 'help', 'index', 'app', 'www'];
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{2,29}$/;
@@ -114,6 +116,27 @@ export function createApp(db) {
       if (method !== 'GET' && method !== 'HEAD' && !sameOrigin(req)) throw bad('bad_origin', 403);
       const ip = clientIp(req);
       let m;
+
+      if (path === '/api/ai/event-plan' && method === 'POST') {
+        const u = await requireUser(req);
+        if (limited(`ai-plan:${u.id}`, 20, 3600000)) throw bad('rate_limited', 429);
+        const b = await readJson(req);
+        const event = str(b.event, 2500, { min: 2 });
+        if (!process.env.OPENAI_API_KEY) throw bad('ai_not_configured', 503);
+        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const model = process.env.OPENAI_MODEL || 'gpt-6-luna';
+        const response = await client.responses.create({
+          model,
+          instructions: AI_PLAN_SYSTEM,
+          input: event,
+          max_output_tokens: 1800,
+        });
+        const raw = String(response.output_text || '').trim().replace(/^\`\`\`json\s*/i, '').replace(/\s*\`\`\`$/i, '');
+        let plan;
+        try { plan = JSON.parse(raw); } catch { console.error('AI planner invalid JSON:', raw.slice(0, 500)); throw bad('ai_bad_response', 502); }
+        if (!plan || typeof plan !== 'object' || !Array.isArray(plan.music_mix) || !Array.isArray(plan.timeline)) throw bad('ai_bad_response', 502);
+        return send(res, 200, { plan }), true;
+      }
 
       if (path === '/api/health' && method === 'GET') {
         await db.get('SELECT 1 AS ok');
