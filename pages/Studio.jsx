@@ -351,7 +351,7 @@ function ShareTab({ dj }) {
         const defaultPosterLogo = 760;
         const posterLogo = Math.max(400, Math.min(900, Number(p.pls) || defaultPosterLogo));
         const maxW = posterLogo; const maxH = 360;
-        const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+        const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
         const lw = Math.max(1, Math.round(img.naturalWidth * scale));
         const lh = Math.max(1, Math.round(img.naturalHeight * scale));
         const ly = 145;
