@@ -202,11 +202,27 @@ export function createApp(db) {
         const raw = String(response.output_text || '').trim().replace(/^\`\`\`json\s*/i, '').replace(/\s*\`\`\`$/i, '');
         let plan;
         try { plan = JSON.parse(raw); } catch { console.error('AI planner invalid JSON:', raw.slice(0, 500)); throw bad('ai_bad_response', 502); }
-        if (!plan || typeof plan !== 'object' || !Array.isArray(plan.music_mix) || !Array.isArray(plan.timeline) || !Array.isArray(plan.recommendations)) throw bad('ai_bad_response', 502);
-        const allowed = new Set(library.map((s) => `${s.title}\\u0000${s.artist}`));
+        if (!plan || typeof plan !== 'object' || !Array.isArray(plan.music_mix) || !Array.isArray(plan.timeline) || !Array.isArray(plan.recommendations)) {
+          console.error('AI planner missing required arrays:', {
+            has_plan: !!plan,
+            music_mix: Array.isArray(plan?.music_mix),
+            timeline: Array.isArray(plan?.timeline),
+            recommendations: Array.isArray(plan?.recommendations),
+          });
+          throw bad('ai_bad_response', 502);
+        }
+        const allowed = new Set(library.map((s) => s.title + '\\u0000' + s.artist));
         for (const group of plan.recommendations) {
-          for (const song of (group?.songs || [])) {
-            if (!allowed.has(`${song?.title}\\u0000${song?.artist}`)) {
+          if (!group || typeof group !== 'object' || !Array.isArray(group.songs)) {
+            console.error('AI planner malformed recommendation group:', group);
+            throw bad('ai_bad_response', 502);
+          }
+          for (const song of group.songs) {
+            if (!song || typeof song !== 'object' || typeof song.title !== 'string' || typeof song.artist !== 'string') {
+              console.error('AI planner malformed song:', song);
+              throw bad('ai_bad_response', 502);
+            }
+            if (!allowed.has(song.title + '\\u0000' + song.artist)) {
               console.error('AI planner recommended song outside curated library:', song);
               throw bad('ai_bad_response', 502);
             }
@@ -215,7 +231,7 @@ export function createApp(db) {
         return send(res, 200, { plan }), true;
       }
 
-      if (path === '/api/spotify/connect' && method === 'GET') {
+            if (path === '/api/spotify/connect' && method === 'GET') {
         const u = await requireUser(req);
         if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) throw bad('spotify_not_configured', 503);
         const state = spotifyState();
