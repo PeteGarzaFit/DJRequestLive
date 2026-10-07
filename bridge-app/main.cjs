@@ -29,14 +29,25 @@ function ensureConfig() {
 
   try {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    // Migrate the unsafe legacy HTTP connector to the file-based connector.
-    if (config.source === 'virtualdj' || config.virtualdj) {
+    const actualVdjHistory = path.join(
+      os.homedir(),
+      'Library',
+      'Application Support',
+      'VirtualDJ',
+      'History',
+      'tracklist.txt'
+    );
+    const configuredHistory = config.virtualdjHistory?.historyFile;
+    const needsMigration =
+      config.source === 'virtualdj' ||
+      !!config.virtualdj ||
+      !configuredHistory ||
+      !fs.existsSync(configuredHistory);
+
+    if (needsMigration) {
       const migrated = {
         source: 'virtualdj-history',
-        virtualdjHistory: {
-          historyFile: config.virtualdjHistory?.historyFile ||
-            path.join(os.homedir(), 'Library', 'Application Support', 'VirtualDJ', 'History', 'tracklist.txt')
-        },
+        virtualdjHistory: { historyFile: actualVdjHistory },
         rekordbox: config.rekordbox || { historyFile: '' }
       };
       fs.writeFileSync(configPath, JSON.stringify(migrated, null, 2));
