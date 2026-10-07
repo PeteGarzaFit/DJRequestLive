@@ -32,6 +32,8 @@ export default function Planner() {
         ? 'AI is not connected yet. Add OPENAI_API_KEY in Hostinger environment variables.'
         : e.code === 'rate_limited' ? 'Too many planner requests. Try again in a few minutes.'
         : e.code === 'ai_api_error' ? 'OpenAI API error. Check the Hostinger API key, billing, model access, and deployment logs.'
+        : e.code === 'server_error' ? 'Server error (500). The AI request is reaching the server but the server is failing before returning a planner result.'
+        : e.code ? `Planner error: ${e.code} (HTTP ${e.status || 'unknown'}).`
         : 'The planner could not build that plan. Try a little more event detail.');
     } finally { setBusy(false); }
   }
