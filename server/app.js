@@ -425,6 +425,8 @@ ${JSON.stringify(library)}`;
         if (typeof d.lb === 'string' && d.lb.trim()) design.lb = str(d.lb, 3);
         if (typeof d.live === 'string' && d.live.trim()) design.live = str(d.live, 40);
         if (typeof d.ig === 'string' && d.ig.trim()) { design.ig = str(d.ig, 40).replace(/^@/, ''); if (!/^[A-Za-z0-9._]+$/.test(design.ig)) throw bad('invalid_field'); }
+        if (typeof d.tt === 'string' && d.tt.trim()) { design.tt = str(d.tt, 40).replace(/^@/, ''); if (!/^[A-Za-z0-9._]+$/.test(design.tt)) throw bad('invalid_field'); }
+        if (typeof d.fb === 'string' && d.fb.trim()) { design.fb = str(d.fb, 200); if (!/^https?:\/\//i.test(design.fb) && !/^[A-Za-z0-9._-]+$/.test(design.fb.replace(/^@/, ''))) throw bad('invalid_field'); }
         if (typeof d.tips === 'string' && d.tips.trim()) { design.tips = str(d.tips, 30); if (!/^[\d.,\s]+$/.test(design.tips)) throw bad('invalid_field'); }
         if (d.ls !== undefined) { const logoSize = Number(d.ls); if (!Number.isFinite(logoSize) || logoSize < 140 || logoSize > 420) throw bad('invalid_field'); design.ls = Math.round(logoSize); }
         const minTip = Math.round(num(b.min_tip) * 100) / 100;
