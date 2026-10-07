@@ -16,6 +16,12 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:rad
 .noise{position:fixed;inset:0;opacity:.035;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");z-index:5}
 .grid{position:fixed;inset:-20%;pointer-events:none;background-image:linear-gradient(rgba(23,105,232,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(23,105,232,.05) 1px,transparent 1px);background-size:70px 70px;transform:perspective(700px) rotateX(64deg) translateY(30%);transform-origin:center;mask-image:linear-gradient(to bottom,transparent 5%,black 55%,transparent 100%);animation:grid 18s linear infinite;z-index:0}
 @keyframes grid{to{background-position:0 70px,70px 0}}
+.binary{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:1;mask-image:linear-gradient(to bottom,transparent 0%,black 16%,black 82%,transparent 100%);opacity:.34}
+.stream{position:absolute;bottom:-35vh;color:#1769e8;font-family:"SF Mono",ui-monospace,monospace;font-size:clamp(11px,1.1vw,16px);line-height:1.65;letter-spacing:.12em;white-space:pre;writing-mode:vertical-rl;text-orientation:mixed;text-shadow:0 0 12px rgba(23,105,232,.65);animation:rise var(--duration) linear infinite;animation-delay:var(--delay);opacity:var(--opacity)}
+.stream span{opacity:.5}.stream b{opacity:1;color:#72aaff;font-weight:500}
+@keyframes rise{from{transform:translateY(0)}to{transform:translateY(-150vh)}}
+@media(prefers-reduced-motion:reduce){.stream{animation:none}}
+
 .wrap{position:relative;z-index:2}.container{width:min(1180px,calc(100% - 48px));margin:auto}
 nav{height:82px;display:flex;align-items:center;justify-content:space-between}.brand{font-weight:800;letter-spacing:-.05em;font-size:20px}.brand span{color:var(--blue)}.status{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#647087}
 .hero{min-height:calc(100vh - 82px);display:flex;align-items:center;justify-content:center;text-align:center;padding:55px 0 105px;position:relative}
@@ -34,12 +40,30 @@ section{padding:110px 0}.sectionLabel{font-size:10px;letter-spacing:.22em;text-t
 .signal{border:1px solid rgba(23,105,232,.25);border-radius:28px;padding:34px;background:linear-gradient(145deg,rgba(23,105,232,.09),rgba(255,255,255,.015));min-height:390px;display:flex;flex-direction:column;justify-content:space-between}.signalTop{display:flex;justify-content:space-between;align-items:center}.signalBadge{font-size:10px;letter-spacing:.18em;color:#8db8ff;text-transform:uppercase}.bars{display:grid;gap:10px}.bar{display:grid;grid-template-columns:105px 1fr 40px;gap:12px;align-items:center;font-size:11px;color:#8f99aa}.track{height:7px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}.fill{height:100%;width:var(--w);background:linear-gradient(90deg,#1769e8,#5c9aff);border-radius:99px}.value{color:#dbe4f3;text-align:right}
 .final{text-align:center;border-top:1px solid var(--line);padding-bottom:120px}.final .sectionTitle{margin-left:auto;margin-right:auto}.coming{display:inline-block;margin-top:28px;padding:14px 20px;border:1px solid rgba(23,105,232,.35);border-radius:999px;color:#8db8ff;font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase}
 footer{text-align:center;padding:0 0 32px;color:#4d5666;font-size:10px;letter-spacing:.16em;text-transform:uppercase}
-@media(max-width:800px){.container{width:min(100% - 34px,1180px)}nav{height:70px}.cards{grid-template-columns:1fr}.flow{grid-template-columns:1fr;gap:35px}.signal{min-height:320px}section{padding:82px 0}.hero{min-height:calc(100vh - 70px);padding-top:30px}.scroll{display:none}}
+@media(max-width:800px){.binary{opacity:.25}.stream{font-size:10px}
+.container{width:min(100% - 34px,1180px)}nav{height:70px}.cards{grid-template-columns:1fr}.flow{grid-template-columns:1fr;gap:35px}.signal{min-height:320px}section{padding:82px 0}.hero{min-height:calc(100vh - 70px);padding-top:30px}.scroll{display:none}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.grid,.heroGlow,.dot{animation:none}}
 </style>
 </head>
 <body>
-<div class="grid"></div><div class="noise"></div>
+<div class="grid"></div>
+<div class="binary" aria-hidden="true">
+<div class="stream" style="left:3%;--duration:17s;--delay:-9s;--opacity:.28">1011010010110101101001011010010110101101001011010010110101101001011010010110101101001011010010110</div>
+<div class="stream" style="left:8%;--duration:23s;--delay:-17s;--opacity:.18">0110101101001011010010110101101001011010010110101101001011010010110101101001011010010110101101001</div>
+<div class="stream" style="left:14%;--duration:19s;--delay:-4s;--opacity:.32">110010101101001011010110100101101001011010110100101101001011010110100101101001011010110100101101</div>
+<div class="stream" style="left:21%;--duration:26s;--delay:-20s;--opacity:.17">001101011010010110100101101011010010110100101101011010010110100101101011010010110100101101011010</div>
+<div class="stream" style="left:29%;--duration:18s;--delay:-11s;--opacity:.25">101011010010110100101101011010010110100101101011010010110100101101011010010110100101101011010010</div>
+<div class="stream" style="left:37%;--duration:24s;--delay:-2s;--opacity:.16">010110100101101011010010110100101101011010010110100101101011010010110100101101011010010110100101</div>
+<div class="stream" style="left:45%;--duration:20s;--delay:-14s;--opacity:.3">110101101001011010010110101101001011010010110101101001011010010110101101001011010010110101101001</div>
+<div class="stream" style="left:53%;--duration:27s;--delay:-7s;--opacity:.15">001011010110100101101001011010110100101101001011010110100101101001011010110100101101001011010110</div>
+<div class="stream" style="left:61%;--duration:19s;--delay:-16s;--opacity:.26">101101001011010110100101101001011010110100101101001011010110100101101001011010110100101101001011</div>
+<div class="stream" style="left:69%;--duration:25s;--delay:-5s;--opacity:.18">011010110100101101001011010110100101101001011010110100101101001011010110100101101001011010110100</div>
+<div class="stream" style="left:77%;--duration:21s;--delay:-12s;--opacity:.29">100101101011010010110100101101011010010110100101101011010010110100101101011010010110100101101011</div>
+<div class="stream" style="left:84%;--duration:28s;--delay:-21s;--opacity:.16">010110100101101001011010110100101101001011010110100101101001011010110100101101001011010110100101</div>
+<div class="stream" style="left:91%;--duration:18s;--delay:-3s;--opacity:.25">110100101101011010010110100101101011010010110100101101011010010110100101101011010010110100101101</div>
+<div class="stream" style="left:96%;--duration:24s;--delay:-15s;--opacity:.18">001011010110100101101001011010110100101101001011010110100101101001011010110100101101001011010110</div>
+</div>
+<div class="noise"></div>
 <div class="wrap">
 <div class="container">
 <nav><div class="brand">SI<span>DJ</span></div><div class="status">SYSTEM INITIALIZING</div></nav>
