@@ -520,7 +520,15 @@ ${JSON.stringify(library)}`;
       throw bad('not_found', 404);
     } catch (e) {
       if (e instanceof HttpError) return send(res, e.status, { error: e.code }), true;
-      console.error('API error:', e);
+      console.error('API error:', { path, method, message: e?.message, stack: e?.stack });
+      // The planner is explicitly fail-safe: never turn an unexpected planner exception
+      // into the generic 500 page. The frontend can distinguish this from other API failures.
+      if (path === '/api/ai/event-plan') {
+        return send(res, 503, {
+          error: 'planner_unavailable',
+          message: 'The planner hit an unexpected server condition. Please retry.'
+        }), true;
+      }
       return send(res, 500, { error: 'server_error' }), true;
     }
   };
