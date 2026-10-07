@@ -125,12 +125,23 @@ export function createApp(db) {
         if (!process.env.OPENAI_API_KEY) throw bad('ai_not_configured', 503);
         const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         const model = process.env.OPENAI_MODEL || 'gpt-6-luna';
-        const response = await client.responses.create({
-          model,
-          instructions: AI_PLAN_SYSTEM,
-          input: event,
-          max_output_tokens: 1800,
-        });
+        let response;
+        try {
+          response = await client.responses.create({
+            model,
+            instructions: AI_PLAN_SYSTEM,
+            input: event,
+            max_output_tokens: 1800,
+          });
+        } catch (e) {
+          console.error('AI planner OpenAI error:', {
+            status: e?.status,
+            code: e?.code,
+            type: e?.type,
+            message: e?.message,
+          });
+          throw bad('ai_api_error', 502);
+        }
         const raw = String(response.output_text || '').trim().replace(/^\`\`\`json\s*/i, '').replace(/\s*\`\`\`$/i, '');
         let plan;
         try { plan = JSON.parse(raw); } catch { console.error('AI planner invalid JSON:', raw.slice(0, 500)); throw bad('ai_bad_response', 502); }
