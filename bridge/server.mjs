@@ -26,7 +26,7 @@ function out(res, status, body) {
 }
 
 function defaultVdjHistoryFile() {
-  return path.join(os.homedir(), 'Documents', 'VirtualDJ', 'History', 'tracklist.txt');
+  return path.join(os.homedir(), 'Library', 'Application Support', 'VirtualDJ', 'History', 'tracklist.txt');
 }
 
 function parseTrackLine(line) {
