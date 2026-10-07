@@ -1,18 +1,48 @@
 # SI DJ Bridge Packaging
 
-This workflow creates unsigned build artifacts only. Production code signing and notarization are intentionally not automated until the Apple Developer ID credentials are placed in GitHub Actions secrets.
+The Bridge is packaged as a standalone Electron desktop application. DJs do not need Node.js or a terminal to run it.
 
-## Production Mac signing
+## Release artifacts
 
-Required secret material should be stored as GitHub Actions secrets, never committed:
-- APPLE_DEVELOPER_ID_CERT_P12
-- APPLE_P12_PASSWORD
-- APPLE_NOTARY_ISSUER_ID
-- APPLE_NOTARY_KEY_ID
-- APPLE_NOTARY_PRIVATE_KEY
+Every `bridge-v*` tag triggers GitHub Actions to build:
 
-The signing job will import the Developer ID Application identity into a temporary keychain, sign with Hardened Runtime, notarize with notarytool, staple the ticket, and produce the final DMG.
+- `SI-DJ-Bridge.dmg` — universal Mac installer for Intel and Apple Silicon
+- `SI-DJ-Bridge-Setup.exe` — Windows x64 installer
 
-## Local developer build
+The workflow publishes both files to the GitHub Release. The website download page points to the latest release assets.
 
-The current Bridge is a Node service. For the first production milestone, package it with a desktop shell/launcher so DJs never need Node or Terminal.
+## Local build
+
+Install dependencies and build the desktop app:
+
+```bash
+npm install
+npm run bridge:package
+```
+
+The Mac installer is written to `release/SI-DJ-Bridge.dmg`.
+
+For Windows, run Electron Builder on Windows:
+
+```bash
+npm install
+npx electron-builder --win nsis --publish never
+```
+
+## Production signing
+
+The application is structurally ready for signing, but production signing credentials must be configured before commercial distribution.
+
+Mac signing/notarization requires Apple Developer ID credentials. Windows signing requires a trusted Authenticode certificate. Credentials must never be committed to the repository.
+
+## Bridge architecture
+
+The desktop app starts the local Bridge service automatically and keeps the service bound to `127.0.0.1:8765`. The service exposes health, configuration and now-playing endpoints locally.
+
+Current connectors:
+
+- VirtualDJ live now-playing
+- Rekordbox history-file connector
+- Serato planned
+
+The desktop UI communicates with the service through Electron IPC; the browser never needs Node.js installed.
