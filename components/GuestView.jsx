@@ -58,6 +58,22 @@ export default function GuestView({ p, preview = false, paused = false, onSend }
               <button className="btn btn-gold btn-block" onClick={async () => toast((await copyText(String(p[done.k]))) ? 'Copied' : 'Couldn’t copy')}>Copy {x.name} {done.k === 'zelle' ? 'email / phone' : 'number'}</button>
               <p className="hint">Open your banking app’s Zelle tab{done.k === 'apple' ? ' (or Messages)' : ''} and send to the {done.k === 'zelle' ? 'address' : 'number'} above.</p>
             </>}
+          {(() => {
+            const socials = [
+              p.ig && { label: 'Instagram', href: `https://instagram.com/${encodeURIComponent(String(p.ig).replace(/^@/, ''))}` },
+              p.tt && { label: 'TikTok', href: `https://tiktok.com/@${encodeURIComponent(String(p.tt).replace(/^@/, ''))}` },
+              p.fb && { label: 'Facebook', href: String(p.fb).startsWith('http') ? String(p.fb) : `https://facebook.com/${encodeURIComponent(String(p.fb).replace(/^@/, ''))}` },
+            ].filter(Boolean);
+            return socials.length ? (
+              <div className="follow-dj">
+                <strong>Enjoying the music?</strong>
+                <span>Follow {p.n || 'the DJ'} for upcoming gigs and updates.</span>
+                <div className="follow-links">
+                  {socials.map((s) => <a key={s.label} className="btn btn-ghost btn-block" href={s.href} target="_blank" rel="noopener noreferrer">Follow on {s.label} ↗</a>)}
+                </div>
+              </div>
+            ) : null;
+          })()}
           <button className="btn btn-ghost btn-block" onClick={() => { setDone(null); setG((v) => ({ ...v, song: '', artist: '', note: '' })); window.scrollTo(0, 0); }}>Request another song</button>
         </section>
       </div>
