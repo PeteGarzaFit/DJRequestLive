@@ -7,8 +7,9 @@ import { PAY, clean, money } from '../lib/pay.js';
 import { toast } from '../lib/toast.js';
 import GuestView from '../components/GuestView.jsx';
 import { Mark } from '../components/Logo.jsx';
+import Planner from './Planner.jsx';
 
-const TABS = [['queue', 'Queue'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
+const TABS = [['queue', 'Queue'], ['planner', 'AI Planner'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
 const FILTERS = [['new', 'New'], ['approved', 'Approved'], ['played', 'Played'], ['declined', 'Declined']];
 const ORIGIN = () => window.location.origin;
 
@@ -83,6 +84,7 @@ export default function Studio() {
           {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => goTab(k)}>{l}</button>)}
         </div>
         {tab === 'queue' && <QueueTab goTab={goTab} />}
+        {tab === 'planner' && <Planner />}
         {tab === 'page' && <PageTab dj={dj} edit={edit} saved={saved} goTab={goTab} />}
         {tab === 'design' && <DesignTab dj={dj} edit={edit} saved={saved} mergeMedia={mergeMedia} goTab={goTab} />}
         {tab === 'share' && <ShareTab dj={dj} />}
