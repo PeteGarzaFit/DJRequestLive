@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 
 const QUICK = [
@@ -19,6 +19,18 @@ export default function Planner() {
   const [plan, setPlan] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [buildProgress, setBuildProgress] = useState(0);
+
+  useEffect(() => {
+    if (!busy) { setBuildProgress(0); return; }
+    let progress = 4;
+    setBuildProgress(progress);
+    const timer = window.setInterval(() => {
+      progress += Math.max(0.35, (92 - progress) * 0.045);
+      setBuildProgress(Math.min(92, Math.round(progress)));
+    }, 140);
+    return () => window.clearInterval(timer);
+  }, [busy]);
 
   async function run(value = event) {
     const text = String(value || '').trim();
@@ -26,6 +38,7 @@ export default function Planner() {
     setEvent(text); setBusy(true); setError(''); setPlan(null);
     try {
       const { plan: result } = await api.aiEventPlan(text);
+      setBuildProgress(100);
       setPlan(result);
     } catch (e) {
       setError(e.code === 'ai_not_configured'
@@ -59,8 +72,11 @@ export default function Planner() {
           maxLength={2500}
         />
         <div className="planner-actions">
-          <button className="btn btn-gold" disabled={!event.trim() || busy} onClick={() => run()}>
-            {busy ? 'Building your plan…' : 'Build My Event Plan →'}
+          <button className={`btn btn-gold planner-build-btn${busy ? ' is-building' : ''}`} disabled={!event.trim() || busy} onClick={() => run()}>
+            {busy && <span className="planner-build-fill" style={{ width: buildProgress + '%' }} aria-hidden="true" />}
+            <span className="planner-build-label">
+              {busy ? `Building your plan… ${buildProgress}%` : 'Build My Event Plan →'}
+            </span>
           </button>
           <button className="btn btn-ghost" disabled={busy} onClick={() => { setEvent(''); setPlan(null); setError(''); }}>Clear</button>
         </div>
