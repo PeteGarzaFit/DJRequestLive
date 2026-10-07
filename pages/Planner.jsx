@@ -152,6 +152,85 @@ function PlanResult({ plan, onRefine, busy }) {
   );
 }
 
+
+function slugify(value) {
+  return String(value || 'djrequestlive-playlist').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 70) || 'djrequestlive-playlist';
+}
+
+function flattenSongs(plan) {
+  const seen = new Set();
+  const songs = [];
+  for (const group of Array.isArray(plan?.recommendations) ? plan.recommendations : []) {
+    for (const song of Array.isArray(group?.songs) ? group.songs : []) {
+      const key = String(song.title || '') + '\u0000' + String(song.artist || '');
+      if (song?.title && song?.artist && !seen.has(key)) {
+        seen.add(key);
+        songs.push({ ...song, phase: group.phase || 'Master Playlist' });
+      }
+    }
+  }
+  return songs;
+}
+
+function downloadText(filename, content, mime = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportPlaylist(plan, format) {
+  const songs = flattenSongs(plan);
+  if (!songs.length) return;
+  const base = slugify(plan.title || 'djrequestlive-master-playlist');
+
+  if (format === 'm3u') {
+    const lines = ['#EXTM3U', '#DJREQUESTLIVE MASTER PLAYLIST', '#TITLE:' + (plan.title || 'DJ Request Live Master Playlist')];
+    songs.forEach((s) => {
+      lines.push('#EXTINF:-1,' + s.title + ' - ' + s.artist);
+      lines.push(s.title + ' - ' + s.artist);
+    });
+    downloadText(base + '.m3u', lines.join('\n') + '\n', 'audio/x-mpegurl;charset=utf-8');
+    return;
+  }
+
+  if (format === 'txt') {
+    const lines = songs.map((s, i) => String(i + 1).padStart(2, '0') + '. ' + s.title + ' — ' + s.artist + '  [' + s.phase + ']');
+    downloadText(base + '.txt', ['DJ REQUEST LIVE', plan.title || 'Master Playlist', '', ...lines].join('\n'));
+    return;
+  }
+
+  if (format === 'csv') {
+    const esc = (v) => '"' + String(v ?? '').replaceAll('"', '""') + '"';
+    const rows = [['Order','Title','Artist','Phase','Reason'], ...songs.map((s, i) => [i + 1, s.title, s.artist, s.phase, s.reason || ''])];
+    downloadText(base + '.csv', rows.map(row => row.map(esc).join(',')).join('\n') + '\n', 'text/csv;charset=utf-8');
+    return;
+  }
+
+  if (format === 'json') {
+    downloadText(base + '.json', JSON.stringify({ source: 'DJ Request Live', title: plan.title || 'Master Playlist', exportedAt: new Date().toISOString(), songs }, null, 2), 'application/json;charset=utf-8');
+    return;
+  }
+
+  if (format === 'rekordbox') {
+    const escXml = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const tracks = songs.map((s, i) => '<TRACK TrackID="' + (i + 1) + '" Name="' + escXml(s.title) + '" Artist="' + escXml(s.artist) + '" Kind="DJ Request Live playlist item" />').join('');
+    const playlistTracks = songs.map((s, i) => '<TRACK Key="' + (i + 1) + '" />').join('');
+    const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<DJ_PLAYLISTS Version="1.0.0"><PRODUCT Name="DJ Request Live" Version="1.0"/><COLLECTION Entries="' + songs.length + '">' + tracks + '</COLLECTION><PLAYLISTS><NODE Type="0" Name="ROOT" Count="1"><NODE Name="' + escXml(plan.title || 'DJ Request Live Master Playlist') + '" Type="1" KeyType="0" Entries="' + songs.length + '">' + playlistTracks + '</NODE></NODE></PLAYLISTS></DJ_PLAYLISTS>';
+    downloadText(base + '-rekordbox.xml', xml, 'application/xml;charset=utf-8');
+    return;
+  }
+
+  if (format === 'package') {
+    const esc = (v) => '"' + String(v ?? '').replaceAll('"', '""') + '"';
+    const csv = [['Order','Title','Artist','Phase','Reason'], ...songs.map((s, i) => [i + 1, s.title, s.artist, s.phase, s.reason || ''])].map(row => row.map(esc).join(',')).join('\n') + '\n';
+    const m3u = ['#EXTM3U', '#DJREQUESTLIVE MASTER PLAYLIST', ...songs.flatMap(s => ['#EXTINF:-1,' + s.title + ' - ' + s.artist, s.title + ' - ' + s.artist])].join('\n') + '\n';
+    const txt = songs.map((s, i) => (i + 1) + '. ' + s.title + ' — ' + s.artist + ' [' + s.phase + ']').join('\n');
+    downloadText(base + '-playlist-package.json', JSON.stringify({ source: 'DJ Request Live', title: plan.title || 'Master Playlist', formats: ['m3u','csv','txt','json'], m3u, csv, txt, songs }, null, 2), 'application/json;charset=utf-8');
+  }
+}
+
 function ResultCard({ title, children }) {
   return <article className="result-card"><h3>{title}</h3>{children}</article>;
 }
