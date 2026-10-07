@@ -42,7 +42,7 @@
 .rl .wall::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,color-mix(in srgb,var(--ink) 50%,transparent),var(--ink) 95%)}
 .rl .scope.pv{overflow:hidden}
 .rl .pv .wall{position:absolute;border-radius:inherit}
-.rl .logo{max-width:220px;max-height:150px;object-fit:contain;filter:drop-shadow(0 10px 30px color-mix(in srgb,var(--glow) 55%,transparent))}
+.rl .logo{width:min(var(--logo-size,220px),80vw);max-height:180px;object-fit:contain;filter:drop-shadow(0 10px 30px color-mix(in srgb,var(--glow) 55%,transparent))}
 .rl .gallery{display:grid;gap:8px}
 .rl .g1{grid-template-columns:1fr}.rl .g2{grid-template-columns:1fr 1fr}.rl .g3{grid-template-columns:repeat(3,1fr)}
 .rl .gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:14px;border:1px solid var(--line);display:block}
@@ -157,3 +157,5 @@
 .rl.rl-app .playlist-export{margin-top:20px;gap:16px!important}.rl.rl-app .export-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.rl.rl-app .export-card{display:grid;gap:5px;text-align:left;padding:15px;border:1px solid var(--line);border-radius:14px;background:var(--deck);color:var(--fg);cursor:pointer;transition:transform .16s ease,border-color .16s ease,background .16s ease}.rl.rl-app .export-card:hover{transform:translateY(-1px);border-color:#4a97ff;background:#121a25}.rl.rl-app .export-card strong{font-size:13px}.rl.rl-app .export-card span{font-size:11px;color:var(--muted);line-height:1.35}.rl.rl-app .export-card.export-primary{border-color:#1769e8;background:linear-gradient(180deg,rgba(23,105,232,.16),rgba(23,105,232,.06))}.rl.rl-app .export-card.export-package{grid-column:span 3;background:linear-gradient(180deg,rgba(74,151,255,.15),rgba(23,105,232,.07));border-color:rgba(74,151,255,.5)}.rl.rl-app .export-note{margin:0;color:var(--muted);font-size:11px;line-height:1.5}
 @media(max-width:700px){.rl.rl-app .export-grid{grid-template-columns:1fr 1fr}.rl.rl-app .export-card.export-package{grid-column:span 2}}
 @media(max-width:420px){.rl.rl-app .export-grid{grid-template-columns:1fr}.rl.rl-app .export-card.export-package{grid-column:span 1}}
+
+.rl .logo-size-control{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.rl .logo-size-control input{width:100%;accent-color:var(--gold)}.rl .logo-size-control output{font-family:var(--mono);font-size:12px;color:var(--gold);min-width:58px;text-align:right}
