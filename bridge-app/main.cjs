@@ -18,32 +18,71 @@ function ensureConfig() {
     }, null, 2));
   }
 }
+
 function bridgeScript() {
   return app.isPackaged
     ? path.join(process.resourcesPath, 'bridge', 'server.mjs')
     : path.join(__dirname, '..', 'bridge', 'server.mjs');
 }
+
 function startBridge() {
-  if (bridge) return;
+  if (bridge && !bridge.killed) return;
+
   ensureConfig();
   bridge = spawn(process.execPath, [bridgeScript()], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', DJRL_BRIDGE_CONFIG: configPath, PORT: String(PORT) },
-    stdio: 'ignore'
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      DJRL_BRIDGE_CONFIG: configPath,
+      PORT: String(PORT)
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
   });
-  bridge.on('exit', () => { bridge = null; });
+
+  bridge.stdout.on('data', data => console.log('[Bridge]', data.toString().trim()));
+  bridge.stderr.on('data', data => console.error('[Bridge]', data.toString().trim()));
+
+  bridge.on('error', err => {
+    console.error('[Bridge process error]', err);
+    bridge = null;
+  });
+
+  bridge.on('exit', (code, signal) => {
+    console.log('[Bridge exited]', { code, signal });
+    bridge = null;
+  });
 }
+
 function stopBridge() {
-  if (bridge) { bridge.kill(); bridge = null; }
+  if (bridge) {
+    bridge.kill();
+    bridge = null;
+  }
 }
+
 function createWindow() {
   win = new BrowserWindow({
-    width: 900, height: 620, minWidth: 720, minHeight: 520,
+    width: 900,
+    height: 620,
+    minWidth: 720,
+    minHeight: 520,
     title: 'SI DJ Bridge',
-    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false }
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
   });
+
   win.loadFile(path.join(__dirname, 'index.html'));
-  win.on('close', e => { if (!app.isQuitting) { e.preventDefault(); win.hide(); } });
+  win.on('close', e => {
+    if (!app.isQuitting) {
+      e.preventDefault();
+      win.hide();
+    }
+  });
 }
+
 function createTray() {
   tray = new Tray(nativeImage.createEmpty());
   tray.setToolTip('SI DJ Bridge');
@@ -55,15 +94,46 @@ function createTray() {
     { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } }
   ]));
 }
+
 ipcMain.handle('bridge:status', async () => {
   try {
-    const r = await fetch('http://127.0.0.1:'+PORT+'/health');
+    const r = await fetch('http://127.0.0.1:' + PORT + '/health');
     return await r.json();
-  } catch { return { connected:false, source:null, nowPlaying:null, error:'Bridge offline' }; }
+  } catch {
+    return {
+      connected: false,
+      source: null,
+      nowPlaying: null,
+      error: 'Bridge offline'
+    };
+  }
 });
-ipcMain.handle('bridge:start', () => { startBridge(); return { ok:true }; });
-ipcMain.handle('bridge:stop', () => { stopBridge(); return { ok:true }; });
-ipcMain.handle('bridge:open-config', () => shell.openPath(configPath));
-app.whenReady().then(() => { ensureConfig(); startBridge(); createWindow(); createTray(); });
-app.on('before-quit', () => { app.isQuitting=true; stopBridge(); });
+
+ipcMain.handle('bridge:start', () => {
+  startBridge();
+  return { ok: true };
+});
+
+ipcMain.handle('bridge:stop', () => {
+  stopBridge();
+  return { ok: true };
+});
+
+ipcMain.handle('bridge:open-config', () => {
+  ensureConfig();
+  return shell.openPath(configPath);
+});
+
+app.whenReady().then(() => {
+  ensureConfig();
+  startBridge();
+  createWindow();
+  createTray();
+});
+
+app.on('before-quit', () => {
+  app.isQuitting = true;
+  stopBridge();
+});
+
 app.on('window-all-closed', e => e.preventDefault());
