@@ -24,6 +24,8 @@ function ping() {
 
 export default function Studio() {
   const nav = useNavigate(); const [dj, setDj] = useState(null); const [fail, setFail] = useState(false);
+  const [outdoorMode, setOutdoorMode] = useState(() => { try { return localStorage.getItem('rl.outdoor') === '1'; } catch { return false; } });
+  const toggleOutdoor = () => setOutdoorMode((v) => { const n = !v; try { localStorage.setItem('rl.outdoor', n ? '1' : '0'); } catch { /* ignore */ } return n; });
   const [tab, setTab] = useState(() => { try { return sessionStorage.getItem('rl.tab') || 'queue'; } catch { return 'queue'; } });
   const [saved, setSaved] = useState('Saved'); const djRef = useRef(null); const timer = useRef(null); djRef.current = dj;
   useEffect(() => { document.title = 'Studio · DJ Request Live'; }, []);
@@ -41,9 +43,9 @@ export default function Studio() {
   if (fail) return <div className="rl rl-app"><div className="wrap"><section className="panel center"><h2 style={{ fontSize: 18 }}>We couldn’t load your page</h2><p className="hint">Refresh to try again.</p></section></div></div>;
   if (!dj) return <div className="rl rl-app"><div className="wrap"><div className="panel center"><p className="hint">Loading your studio…</p></div></div></div>;
   return (
-    <div className="rl rl-app"><div className="wrap wide">
+    <div className={"rl rl-app" + (outdoorMode ? " outdoor-mode" : "")}><div className="wrap wide">
       <div className="shead"><Link to="/" className="brand" style={{ textDecoration: 'none', color: 'inherit' }}><Mark size={28} badge />DJ Request Live</Link>
-        <div className="shead-r"><label className="golive" htmlFor="golive"><input type="checkbox" id="golive" checked={!!dj.is_live} onChange={(e) => { edit({ is_live: e.target.checked }); setTimeout(saveNow, 0); }} />{dj.is_live ? 'Taking requests' : 'Paused'}</label><button className="mini" onClick={logout}>Log out</button></div>
+        <div className="shead-r"><button className={"outdoor-toggle" + (outdoorMode ? " active" : "")} onClick={toggleOutdoor} aria-pressed={outdoorMode} title="High-contrast mode for bright outdoor sunlight">{outdoorMode ? "☀ Outdoor" : "☾ Dark"}</button><label className="golive" htmlFor="golive"><input type="checkbox" id="golive" checked={!!dj.is_live} onChange={(e) => { edit({ is_live: e.target.checked }); setTimeout(saveNow, 0); }} />{dj.is_live ? 'Taking requests' : 'Paused'}</label><button className="mini" onClick={logout}>Log out</button></div>
       </div>
       <div className="tabs" role="tablist">{TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => goTab(k)}>{l}</button>)}</div>
       {tab === 'queue' && <QueueTab goTab={goTab} />}{tab === 'planner' && <Planner />}{tab === 'page' && <PageTab dj={dj} edit={edit} saved={saved} goTab={goTab} />}{tab === 'design' && <DesignTab dj={dj} edit={edit} saved={saved} mergeMedia={mergeMedia} goTab={goTab} />}{tab === 'share' && <ShareTab dj={dj} />}
