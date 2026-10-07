@@ -263,6 +263,10 @@ function DesignTab({ dj, edit, saved, mergeMedia, goTab }) {
           <div className="field"><label htmlFor="d-a">Accent color</label><div className="colorin"><input type="color" id="d-a" value={A} onChange={(e) => setD({ a: e.target.value })} /><span className="hint">Buttons, highlights</span></div></div>
           <div className="field"><label htmlFor="d-gl">Glow color</label><div className="colorin"><input type="color" id="d-gl" value={G} onChange={(e) => setD({ gl: e.target.value })} /><span className="hint">Background light</span></div></div>
         </div>
+        <div className="field"><label htmlFor="d-ls">Logo size</label>
+          <div className="logo-size-control"><input type="range" id="d-ls" min="140" max="420" step="10" value={Math.max(140, Math.min(420, Number(d.ls) || 220))} onChange={(e) => setD({ ls: Number(e.target.value) })} /><output>{Math.max(140, Math.min(420, Number(d.ls) || 220))} px</output></div>
+          <span className="hint">Resize your logo on the guest page. Use a transparent PNG for the cleanest result.</span>
+        </div>
         <div className="field"><label>Background</label>
           <div className="opt4">{Object.entries(BGS).map(([k, b]) => <button key={k} className="ob" aria-pressed={(d.bg || 'midnight') === k} onClick={() => setD({ bg: k })}><span className="dot" style={{ background: b.ink }} />{b.n}</button>)}</div></div>
         <div className="field"><label>Font style</label>
@@ -321,20 +325,43 @@ function ShareTab({ dj }) {
     g = x.createRadialGradient(0, H * 0.2, 0, 0, H * 0.2, 700); g.addColorStop(0, a + '33'); g.addColorStop(1, a + '00'); x.fillStyle = g; x.fillRect(0, 0, W, H);
     x.textAlign = 'center'; x.fillStyle = a;
     if ('letterSpacing' in x) x.letterSpacing = '8px';
-    x.font = '500 30px "JetBrains Mono", monospace'; x.fillText('SCAN TO REQUEST A SONG', W / 2, 150);
+    x.font = '500 30px "JetBrains Mono", monospace'; x.fillText('SCAN TO REQUEST A SONG', W / 2, 100);
     if ('letterSpacing' in x) x.letterSpacing = '0px';
-    let size = 130; const name = (dj.name || '').toUpperCase();
+
+    // Put the DJ's uploaded logo prominently on the poster when one exists.
+    let logoHeight = 0;
+    if (dj.logo) {
+      try {
+        const img = await new Promise((resolve, reject) => {
+          const i = new Image();
+          i.onload = () => resolve(i);
+          i.onerror = reject;
+          i.src = dj.logo + (dj.logo.includes('?') ? '&' : '?') + 'poster=' + Date.now();
+        });
+        const maxW = 720; const maxH = 210;
+        const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+        const lw = Math.max(1, Math.round(img.naturalWidth * scale));
+        const lh = Math.max(1, Math.round(img.naturalHeight * scale));
+        const ly = 145;
+        x.drawImage(img, (W - lw) / 2, ly, lw, lh);
+        logoHeight = lh;
+      } catch { /* poster still works if the logo cannot be loaded */ }
+    }
+
+    let size = 112; const name = (dj.name || '').toUpperCase();
+    const nameY = Math.max(390, 175 + logoHeight + 85);
     do { x.font = `800 ${size}px ${dispFont}`; size -= 4; } while (x.measureText(name).width > W - 140 && size > 40);
-    x.fillStyle = '#f4eff8'; x.fillText(name, W / 2, 330);
-    const q = 700; const qx = (W - q) / 2; const qy = 430;
-    x.fillStyle = '#fbf7ef'; x.beginPath(); x.roundRect(qx - 40, qy - 40, q + 80, q + 80, 48); x.fill();
+    x.fillStyle = '#f4eff8'; x.fillText(name, W / 2, nameY);
+
+    const q = 620; const qx = (W - q) / 2; const qy = nameY + 105;
+    x.fillStyle = '#fbf7ef'; x.beginPath(); x.roundRect(qx - 38, qy - 38, q + 76, q + 76, 46); x.fill();
     x.imageSmoothingEnabled = false; x.drawImage(qr, qx, qy, q, q);
-    x.fillStyle = '#f4eff8'; x.font = '600 38px "Manrope", system-ui, sans-serif';
-    x.fillText('Pick a song. Send a tip. I’ll play it.', W / 2, qy + q + 130);
-    x.fillStyle = a; x.font = '700 32px "Manrope", system-ui, sans-serif';
-    x.fillText(PAY.filter((m) => clean(dj.pay[m.k])).map((m) => m.name).join('   ·   '), W / 2, qy + q + 200);
-    x.fillStyle = '#a197ae'; x.font = '500 26px "JetBrains Mono", monospace';
-    x.fillText(link.replace(/^https?:\/\//, ''), W / 2, H - 90);
+    x.fillStyle = '#f4eff8'; x.font = '600 36px "Manrope", system-ui, sans-serif';
+    x.fillText('Pick a song. Send a tip. I’ll play it.', W / 2, qy + q + 105);
+    x.fillStyle = a; x.font = '700 30px "Manrope", system-ui, sans-serif';
+    x.fillText(PAY.filter((m) => clean(dj.pay[m.k])).map((m) => m.name).join('   ·   '), W / 2, qy + q + 165);
+    x.fillStyle = '#a197ae'; x.font = '500 24px "JetBrains Mono", monospace';
+    x.fillText(link.replace(/^https?:\/\//, ''), W / 2, H - 70);
     c.toBlob((b) => b && saveBlob(b, `${dj.slug}-request-poster.png`), 'image/png');
   }
 
