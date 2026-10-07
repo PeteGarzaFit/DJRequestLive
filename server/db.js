@@ -58,12 +58,12 @@ export async function createDb() {
 
 
 async function seedSongs(db) {
-  const n = await db.all('SELECT COUNT(*) AS n FROM songs');
-  if (Number(n[0]?.n || 0) > 0) return;
+  // Upsert the curated library on every production startup so new SI DJ knowledge
+  // reaches existing databases without requiring a manual database reset.
   const rows = songRows();
   for (const s of rows) {
     await db.run(
-      'INSERT IGNORE INTO songs (title, artist, genre, era, bpm, energy, dancefloor_score, singalong_score, crossgen_score, content, tags) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO songs (title, artist, genre, era, bpm, energy, dancefloor_score, singalong_score, crossgen_score, content, tags) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE genre=VALUES(genre), era=VALUES(era), bpm=VALUES(bpm), energy=VALUES(energy), dancefloor_score=VALUES(dancefloor_score), singalong_score=VALUES(singalong_score), crossgen_score=VALUES(crossgen_score), content=VALUES(content), tags=VALUES(tags), active=1',
       [s.title, s.artist, s.genre, s.era, s.bpm, s.energy, s.dancefloor, s.singalong, s.crossgen, s.content, s.tags],
     );
   }
