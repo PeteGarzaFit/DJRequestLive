@@ -103,11 +103,35 @@ function PlanResult({ plan, onRefine, busy }) {
           <ul className="specials">{(plan.special_moments || []).map(x => <li key={x.moment}><b>{x.moment}</b><span>{x.music_direction}</span></li>)}</ul>
         </ResultCard>
       </div>
+      {Array.isArray(plan.recommendations) && plan.recommendations.length > 0 && (
+        <section className="song-recommendations panel">
+          <div className="planner-box-head">
+            <div><span className="eyebrow">CURATED HIT LIBRARY</span><h2>What I'd Load for This Crowd</h2><p className="hint">Recommendations are selected from the DJ Request Live hit library.</p></div>
+            <span className="result-badge">LIBRARY PICKS</span>
+          </div>
+          <div className="song-phase-grid">
+            {plan.recommendations.map((group) => (
+              <article className="song-phase" key={group.phase}>
+                <div className="song-phase-head"><h3>{group.phase}</h3><span>{(group.songs || []).length} picks</span></div>
+                <p className="song-phase-reason">{group.reason}</p>
+                <div className="song-list">
+                  {(group.songs || []).map((song) => (
+                    <div className="song-row" key={song.title + song.artist}>
+                      <div><b>{song.title}</b><span>{song.artist}</span></div>
+                      <small>{song.reason}</small>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="refine panel">
         <b>Refine the plan</b>
         <div className="refine-row"><input className="input" value={refine} onChange={e => setRefine(e.target.value)} placeholder="Make it 20% more country. Less hip-hop. They're mostly in their 40s." /><button className="btn btn-gold" disabled={!refine.trim() || busy} onClick={() => { onRefine(refine); setRefine(''); }}>Refine →</button></div>
       </div>
-      <p className="planner-note">Phase 1 builds the event strategy. The curated DJRequestLive track library comes next, so song recommendations are grounded in our DJ database instead of invented by AI.</p>
+      <p className="planner-note">Recommendations are grounded in the curated DJRequestLive hit library. AI selects from our records; it does not invent the songs.</p>
     </section>
   );
 }
