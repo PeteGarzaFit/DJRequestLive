@@ -175,6 +175,9 @@
 .rl.rl-app .tabs button:hover{color:#fff}
 .rl.rl-app .sidj-command{gap:12px;padding:16px;border-color:rgba(23,105,232,.28);background:linear-gradient(180deg,rgba(23,105,232,.075),rgba(14,19,27,.92));box-shadow:0 14px 36px -28px #1769e8}
 .rl.rl-app .sidj-command .shead{margin-bottom:0}
+.rl.rl-app .sidj-live-link{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid rgba(23,105,232,.22);background:rgba(23,105,232,.045);border-radius:10px}.rl.rl-app .sidj-live-link b{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.09em;color:#8fbcff}.rl.rl-app .sidj-live-link small{display:block;color:#697382;font-size:10px;margin-top:2px}.rl.rl-app .sidj-live-link .dot{width:8px;height:8px;border-radius:50%;background:#697382;flex:none}.rl.rl-app .sidj-live-link .dot.on{background:#21c77a;box-shadow:0 0 10px rgba(33,199,122,.55)}.rl.rl-app .sidj-now{display:grid;gap:3px;padding:10px 11px;border-radius:12px;background:rgba(23,105,232,.06);border:1px solid rgba(23,105,232,.25)}.rl.rl-app .sidj-now strong{font-size:15px;overflow-wrap:anywhere}.rl.rl-app .sidj-now>span{font-size:11px;color:var(--muted)}
+.rl.rl-app.outdoor-mode .sidj-live-link{background:#edf5ff;border-color:#a9c4e1}.rl.rl-app.outdoor-mode .sidj-live-link b{color:#1257d6}.rl.rl-app.outdoor-mode .sidj-live-link small{color:#4d5c6c}.rl.rl-app.outdoor-mode .sidj-now{background:#edf5ff;border-color:#9db9d8}
+
 .rl.rl-app .sidj-command .eyebrow{color:#4a97ff;font-weight:800}
 .rl.rl-app .sidj-command .btn-ghost{border-color:rgba(23,105,232,.42);color:#8fbcff;background:rgba(23,105,232,.07);padding:8px 12px}
 .rl.rl-app .sidj-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
