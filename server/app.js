@@ -426,6 +426,7 @@ ${JSON.stringify(library)}`;
         if (typeof d.live === 'string' && d.live.trim()) design.live = str(d.live, 40);
         if (typeof d.ig === 'string' && d.ig.trim()) { design.ig = str(d.ig, 40).replace(/^@/, ''); if (!/^[A-Za-z0-9._]+$/.test(design.ig)) throw bad('invalid_field'); }
         if (typeof d.tips === 'string' && d.tips.trim()) { design.tips = str(d.tips, 30); if (!/^[\d.,\s]+$/.test(design.tips)) throw bad('invalid_field'); }
+        if (d.ls !== undefined) { const logoSize = Number(d.ls); if (!Number.isFinite(logoSize) || logoSize < 140 || logoSize > 420) throw bad('invalid_field'); design.ls = Math.round(logoSize); }
         const minTip = Math.round(num(b.min_tip) * 100) / 100;
         if (minTip < 0 || minTip > 10000) throw bad('invalid_field');
         await db.run(
