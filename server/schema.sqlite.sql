@@ -3,7 +3,9 @@ CREATE TABLE users (
   id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
   dj_name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, tagline TEXT NOT NULL DEFAULT '', genres TEXT NOT NULL DEFAULT '',
   min_tip REAL NOT NULL DEFAULT 0, pay_json TEXT NOT NULL, design_json TEXT NOT NULL,
-  logo_media INTEGER NULL, wall_media INTEGER NULL, photos_json TEXT NOT NULL, is_live INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL
+  logo_media INTEGER NULL, wall_media INTEGER NULL, photos_json TEXT NOT NULL, is_live INTEGER NOT NULL DEFAULT 1,
+  spotify_access_token TEXT NULL, spotify_refresh_token TEXT NULL, spotify_expires_at INTEGER NULL, spotify_account_id TEXT NULL, spotify_display_name TEXT NULL,
+  created_at INTEGER NOT NULL
 );
 CREATE TABLE sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
