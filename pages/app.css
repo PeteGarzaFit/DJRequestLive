@@ -309,3 +309,15 @@
   .song-phase-grid{grid-template-columns:1fr}
   .song-row{grid-template-columns:1fr}
 }
+
+
+/* Live AI build progress */
+.rl.rl-app .planner-build-btn{position:relative;overflow:hidden;isolation:isolate;min-height:50px}
+.rl.rl-app .planner-build-btn .planner-build-fill{position:absolute;inset:0 auto 0 0;background:rgba(255,255,255,.24);z-index:-1;transition:width .14s ease-out}
+.rl.rl-app .planner-build-btn.is-building{cursor:wait;background:linear-gradient(180deg,#4a97ff,#1769e8 55%,#1257d6)}
+.rl.rl-app .planner-build-label{position:relative;z-index:1;white-space:nowrap}
+.rl.rl-app .planner-build-btn.is-building::after{content:"";position:absolute;top:0;bottom:0;width:70px;left:-90px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);animation:planner-scan 1.4s linear infinite;pointer-events:none}
+@keyframes planner-scan{to{left:110%}}
+@media(prefers-reduced-motion:reduce){
+  .rl.rl-app .planner-build-btn.is-building::after{animation:none}
+}
