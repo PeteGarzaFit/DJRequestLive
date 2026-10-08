@@ -125,7 +125,7 @@
   }
   .rl .studio-command-layout .sidj-command > .shead,
   .rl .studio-command-layout .sidj-command > .sidj-livebar,
-  .rl .studio-command-layout .sidj-command > .sidj-grid:first-of-type,
+  .rl .studio-command-layout .sidj-command > .sidj-grid,
   .rl .studio-command-layout .sidj-command > .hint{grid-column:1 / -1}
   .rl .studio-command-layout .sidj-command > .sidj-section{
     margin:0;
