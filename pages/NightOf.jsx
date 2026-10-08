@@ -89,6 +89,31 @@ export default function NightOf() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!plan.details?.eventDate || !plan.eventType || !plan.name) return;
+      try {
+        const eventKey = await eventMemoryKey(plan);
+        const result = await api.siDjEventMemories({ event_key: eventKey, limit: 1 });
+        if (alive && result?.memories?.[0]) {
+          const m = result.memories[0];
+          setMemory({
+            ...m,
+            totals: {
+              planned_tracks: Number(m.planned_track_count || 0),
+              played_tracks: Number(m.played_track_count || 0),
+              unique_played: Number(m.unique_played_count || 0),
+              planned_played: Number(m.planned_played_count || 0),
+              repeat_request_count: Number(m.repeat_request_count || 0)
+            }
+          });
+        }
+      } catch { /* Event memory is optional while offline. */ }
+    })();
+    return () => { alive = false; };
+  }, [plan]);
+
   function toggle(key) {
     setDone(x => {
       const next = { ...x, [key]: !x[key] };
