@@ -148,8 +148,9 @@ export default function Intelligence(){
   },[query,libraryTracks]);
 
   const local=useMemo(()=>{
-    if(libraryBusy || !Number(librarySummary?.tracks || 0)) return [];
-    let rows=libraryTracks;
+    if(libraryBusy) return [];
+    const hasPrivateLibrary = Number(librarySummary?.tracks || 0) > 0;
+    let rows = hasPrivateLibrary ? libraryTracks : songRows();
     if(artistFilter){
       rows=rows.filter(s=>normalizeArtist(s.artist)===normalizeArtist(artistFilter));
     }else if(query.trim()){
@@ -160,6 +161,9 @@ export default function Intelligence(){
     return rows.map(s=>({...s,_score:scoreSong(s,filters,bridge.nowPlaying)}))
       .sort((a,b)=>b._score-a._score || diversityScore(a,refreshNonce)-diversityScore(b,refreshNonce));
   },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce,libraryBusy,librarySummary,libraryTracks]);
+
+  const suggestionSource = Number(librarySummary?.tracks || 0) > 0 ? 'PRIVATE LIBRARY' : 'SI DJ KNOWLEDGE';
+  const bridgeMode = bridge.connected && bridge.nowPlaying ? 'BRIDGE CONNECTED · LIVE TRACK ANCHOR' : 'BRIDGE OFFLINE · MANUAL SUGGESTIONS';
 
   useEffect(()=>{
     setVisibleCount(10);
@@ -240,7 +244,7 @@ export default function Intelligence(){
       <aside className="panel" style={{position:'sticky',top:128}}>
         <div className="eyebrow">SUPER INTELLIGENCE DJ</div>
         <h2 style={{margin:'6px 0 4px'}}>Steer the next track</h2>
-        <p className="hint" style={{marginTop:0}}>Choose a lane. SI DJ narrows the library so you don't dig through crates.</p>
+        <p className="hint" style={{marginTop:0}}>Choose a lane. SI DJ can suggest tracks with or without the Bridge. When the Bridge is connected, the current track becomes the transition anchor.</p>
         <div className="eyebrow" style={{marginTop:20}}>GENRE</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
           {GENRES.map(([g,c])=><button key={g} onClick={()=>{setGenre(current=>current===g?'':g);setAi([])}} style={{minHeight:48,textAlign:'left',padding:'10px 12px',borderRadius:9,border:genre===g?'2px solid '+c:'1px solid '+c+'66',background:genre===g?c+'30':'rgba(255,255,255,.035)',color:'var(--fg)',boxShadow:genre===g?'0 0 18px '+c+'38':'none',fontWeight:800,cursor:'pointer'}}>{g}</button>)}
@@ -258,7 +262,7 @@ export default function Intelligence(){
 
       <main>
         <section className="panel">
-          <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>Your next-track shortlist</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · ranked against the current track</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{ai.length?'AI RANKED':'LIBRARY RANKED'}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
+          <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>Your next-track shortlist</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · ranked against the current track</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{ai.length?'AI RANKED':suggestionSource}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
           <div className="field" style={{marginTop:14}}><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search artist or song…" /></div>
           <div style={{display:'grid',gap:9,marginTop:12}}>
             {display.map((s,i)=><article key={(s.title||'')+'|'+(s.artist||'')+'|'+i} style={{display:'grid',gridTemplateColumns:'44px minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'13px 14px',border:'1px solid rgba(255,255,255,.09)',borderRadius:12,background:'rgba(255,255,255,.025)'}}>
@@ -268,7 +272,7 @@ export default function Intelligence(){
             </article>)}
           </div>
           {!display.length && libraryBusy && <p className="hint">Checking your private SI DJ library…</p>}
-          {!display.length && !libraryBusy && Number(librarySummary?.tracks || 0) === 0 && <div className="ai-pill" style={{marginTop:12}}>SI DJ LIBRARY EMPTY — connect the SI DJ Bridge and scan your music library to populate this list.</div>}
+          {!display.length && !libraryBusy && Number(librarySummary?.tracks || 0) === 0 && <div className="ai-pill" style={{marginTop:12}}>NO PRIVATE LIBRARY YET — showing SI DJ knowledge suggestions. Connect the SI DJ Bridge for a live track anchor, or scan your library to make these recommendations library-specific.</div>}
           {!display.length && !libraryBusy && Number(librarySummary?.tracks || 0) > 0 && <p className="hint">{artistFilter ? 'No '+artistFilter+' tracks match the current hard filters. Remove an era or genre control to widen the search.' : 'No matches. Change one hard filter or search term to widen the shortlist.'}</p>}
           {display.length < displayPool.length && <button className="btn btn-ghost btn-block" style={{marginTop:12}} onClick={()=>setVisibleCount(n=>Math.min(n+10,displayPool.length))}>MORE TRACKS →</button>}
           {display.length >= displayPool.length && displayPool.length > 0 && <p className="hint" style={{marginTop:10}}>Showing all {displayPool.length} matching tracks — no unrelated songs added.</p>}
