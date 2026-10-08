@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import Logo from '../components/Logo.jsx';
 import './bridge.css';
 
@@ -6,7 +7,7 @@ const GITHUB_RELEASE = 'https://github.com/PeteGarzaFit/DJRequestLive/releases/l
 
 export default function BridgeDownload(){
   return <div className="bridge-download">
-    <header><Logo /><a href="/studio">DJ Studio</a></header>
+    <header><Logo /><Link className="bridge-studio-link" to="/studio">DJ Studio</Link></header>
     <main>
       <span className="bd-kicker">SUPER INTELLIGENCE DJ</span>
       <h1>SI DJ Bridge</h1>
