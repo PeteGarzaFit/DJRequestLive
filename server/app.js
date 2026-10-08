@@ -406,7 +406,49 @@ export function createApp(db) {
       );
     }
 
-    return { memory: { id:Number(memory.id), event_key:eventKey, event_type:eventType, event_name:eventName, venue, event_date:eventDate, totals:summary.totals, worked, skipped, repeated_tracks:repeatedTracks, repeated_requests:repeatedRequests } };
+    // Consolidate the temporary event buffer into durable SI DJ learning context.
+    // Played counts are already written by the Bridge; this pass adds the durable
+    // event-plan and guest-request signals before the temporary event rows are purged.
+    for (const t of tracks) {
+      if (!t.artist_key || !t.title_key) continue;
+      let masterTrack = await db.get(
+        'SELECT * FROM si_dj_learning_tracks WHERE artist_key = ? AND title_key = ?',
+        [t.artist_key, t.title_key]
+      );
+      if (!masterTrack) {
+        const made = await db.run(
+          'INSERT INTO si_dj_learning_tracks (artist_key,title_key,artist,title,play_count,dj_count,last_played,first_played,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+          [t.artist_key,t.title_key,t.artist,t.title,Number(t.played_count || 0),0,t.last_played || null,t.first_played || null,Date.now(),Date.now()]
+        );
+        masterTrack = await db.get('SELECT * FROM si_dj_learning_tracks WHERE id = ?', [made.insertId]);
+      }
+
+      const moments = t.moments.length ? t.moments : [''];
+      for (const moment of moments) {
+        const existing = await db.get(
+          'SELECT * FROM si_dj_learning_context WHERE track_id = ? AND event_type = ? AND event_moment = ?',
+          [masterTrack.id,eventType,String(moment).slice(0,160)]
+        );
+        if (existing) {
+          await db.run(
+            'UPDATE si_dj_learning_context SET planned_count = planned_count + ?, request_count = request_count + ?, event_count = event_count + 1, last_played = CASE WHEN ? > COALESCE(last_played,0) THEN ? ELSE last_played END WHERE track_id = ? AND event_type = ? AND event_moment = ?',
+            [Number(t.planned_count || 0),Number(t.request_count || 0),Number(t.last_played || 0),Number(t.last_played || 0),masterTrack.id,eventType,String(moment).slice(0,160)]
+          );
+        } else {
+          await db.run(
+            'INSERT INTO si_dj_learning_context (track_id,event_type,event_moment,play_count,dj_count,last_played,planned_count,request_count,event_count) VALUES (?,?,?,?,?,?,?,?,?)',
+            [masterTrack.id,eventType,String(moment).slice(0,160),Number(t.played_count || 0),0,t.last_played || null,Number(t.planned_count || 0),Number(t.request_count || 0),1]
+          );
+        }
+      }
+    }
+
+    // The event has now been distilled into SI DJ's durable learning tables.
+    // Do not retain the raw event-memory payload after successful consolidation.
+    await db.run('DELETE FROM si_dj_event_memory_tracks WHERE memory_id = ?', [memory.id]);
+    await db.run('DELETE FROM si_dj_event_memory WHERE id = ? AND user_id = ?', [memory.id,u.id]);
+
+    return { memory: null, consolidated: true, purged: true, event: { event_key:eventKey, event_type:eventType, event_name:eventName, venue, event_date:eventDate, totals:summary.totals }, worked, skipped, repeated_tracks:repeatedTracks, repeated_requests:repeatedRequests };
   }
 
 
