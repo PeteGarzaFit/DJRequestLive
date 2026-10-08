@@ -110,7 +110,7 @@ export default function Curator(){
         </div>
         {eventType==='Wedding' && <div className="panel" style={{marginTop:16,background:'rgba(255,255,255,.025)'}}>
           <div className="eyebrow">WEDDING CONTACTS</div>
-          <p className="hint">The original DJ planning form collected key family contacts and identified one primary person who knows the couple's wishes. fileciteturn242file2L2-L14</p>
+          <p className="hint">The original DJ planning form collected key family contacts and identified one primary person who knows the couple's wishes.</p>
           <textarea className="input" rows="5" value={timeline} onChange={e=>setTimeline(e.target.value)} placeholder="Bride / Groom / parents / coordinator names and phone numbers…" />
         </div>}
         <div className="field" style={{marginTop:16}}><label>Anything the DJ should know?</label><textarea className="input" rows="4" value={details.specialNotes} onChange={e=>setDetail('specialNotes',e.target.value)} placeholder="Accessibility, venue restrictions, family dynamics, cultural details, surprises, etc." /></div>
@@ -119,7 +119,7 @@ export default function Curator(){
       {tab==='WEDDING FLOW' && eventType==='Wedding' && <section className="panel">
         <div className="eyebrow">WEDDING FLOW</div>
         <h2 style={{margin:'6px 0'}}>Plan the moments, not a spreadsheet.</h2>
-        <p className="hint">The planning form calls for an order of reception events while leaving exact timing flexible for the DJ. fileciteturn242file4L5-L8</p>
+        <p className="hint">The planning form calls for an order of reception events while leaving exact timing flexible for the DJ.</p>
         <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(280px,420px)',gap:16,marginTop:16}}>
           <div style={{display:'grid',gap:7}}>
             {moments.map((m,i)=><button key={m.item} onClick={()=>{setActive(m.item);setTab('MUSIC')}} style={{textAlign:'left',padding:13,borderRadius:10,border:active===m.item?'1px solid var(--accent)':'1px solid rgba(255,255,255,.08)',background:active===m.item?'rgba(255,255,255,.07)':'rgba(255,255,255,.02)',color:'var(--fg)',cursor:'pointer'}}>
@@ -176,18 +176,18 @@ export default function Curator(){
         </main>
         <aside>
           <section className="panel"><div className="eyebrow">THIS MOMENT</div><h2 style={{margin:'5px 0'}}>Your picks</h2><div style={{display:'grid',gap:7}}>{selected.map((s,i)=><div key={key(s)} style={{padding:'10px 11px',border:'1px solid rgba(255,255,255,.08)',borderRadius:9}}><strong>{i+1}. {s.title}</strong><span style={{display:'block',fontSize:12,opacity:.7}}>{s.artist}</span></div>)}{!selected.length&&<p className="hint">Nothing selected yet.</p>}</div><div className="field" style={{marginTop:12}}><label>Notes</label><textarea className="input" rows="4" value={notes[active]||''} onChange={e=>setNotes(x=>({...x,[active]:e.target.value}))} placeholder="Whole song, edited version, special cue, or DJ note." /></div></section>
-          {eventType==='Wedding' && <section className="panel" style={{marginTop:12}}><div className="eyebrow">SPECIAL SONGS</div><p className="hint">The original planning form specifically called out grand entrance, bridal-party entrance, first dance and parent dances. fileciteturn242file2L54-L70</p>{Object.keys(specialSongs).map(k=><div className="field" key={k} style={{marginTop:9}}><label>{k}</label><input className="input" value={specialSongs[k]} onChange={e=>setSpecialSongs(x=>({...x,[k]:e.target.value}))} placeholder="Song — Artist" /></div>)}</section>}
+          {eventType==='Wedding' && <section className="panel" style={{marginTop:12}}><div className="eyebrow">SPECIAL SONGS</div><p className="hint">The original planning form specifically called out grand entrance, bridal-party entrance, first dance and parent dances.</p>{Object.keys(specialSongs).map(k=><div className="field" key={k} style={{marginTop:9}}><label>{k}</label><input className="input" value={specialSongs[k]} onChange={e=>setSpecialSongs(x=>({...x,[k]:e.target.value}))} placeholder="Song — Artist" /></div>)}</section>}
         </aside>
       </div>}
 
       {tab==='PREFERENCES' && <section className="panel">
         <div className="eyebrow">MUSIC DNA</div><h2 style={{margin:'6px 0'}}>Tell the DJ what you like — and what you don't.</h2>
-        <p className="hint">The old form used explicit like/dislike choices for music styles and artists. This keeps that information but makes it much faster to complete. fileciteturn242file2L85-L94</p>
+        <p className="hint">The old form used explicit like/dislike choices for music styles and artists. This keeps that information but makes it much faster to complete.</p>
         <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(280px,420px)',gap:16,marginTop:16}}>
           <div><div className="eyebrow">MUSIC STYLES</div><div style={{display:'flex',flexWrap:'wrap',gap:7,marginTop:10}}>{WEDDING_STYLES.map(s=><button key={s} onClick={()=>toggleStyle(s)} className={styles[s]==='like'?'btn btn-gold btn-sm':styles[s]==='dislike'?'btn btn-ghost btn-sm':'btn btn-ghost btn-sm'} style={styles[s]==='dislike'?{borderColor:'rgba(255,90,90,.5)',textDecoration:'line-through'}:{}}>{s}</button>)}</div><p className="hint" style={{fontSize:11,marginTop:10}}>Tap once = like · twice = dislike · third = clear.</p></div>
           <div><div className="eyebrow">ARTISTS / GROUPS</div><textarea className="input" rows="8" value={artists} onChange={e=>setArtists(e.target.value)} placeholder="Artists you love or dislike — one per line, optionally add LIKE or DISLIKE." /></div>
         </div>
-        <div className="panel" style={{marginTop:18,background:'rgba(255,255,255,.025)'}}><div className="eyebrow">DJ / MC PREFERENCES</div><p className="hint">Set the behavior you want from the DJ during the event. fileciteturn242file2L126-L134</p><div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:8,marginTop:10}}>{BEHAVIORS.map(s=><button key={s} onClick={()=>toggleBehavior(s)} style={{textAlign:'left',padding:11,borderRadius:9,border:behavior[s]==='do'?'1px solid var(--accent)':behavior[s]==='dont'?'1px solid rgba(255,90,90,.5)':'1px solid rgba(255,255,255,.08)',background:behavior[s]==='do'?'rgba(233,187,95,.08)':behavior[s]==='dont'?'rgba(255,90,90,.06)':'transparent',color:'var(--fg)'}}><strong>{behavior[s]==='do'?'DO · ':behavior[s]==='dont'?'DON’T · ':''}</strong>{s}</button>)}</div></div>
+        <div className="panel" style={{marginTop:18,background:'rgba(255,255,255,.025)'}}><div className="eyebrow">DJ / MC PREFERENCES</div><p className="hint">Set the behavior you want from the DJ during the event.</p><div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:8,marginTop:10}}>{BEHAVIORS.map(s=><button key={s} onClick={()=>toggleBehavior(s)} style={{textAlign:'left',padding:11,borderRadius:9,border:behavior[s]==='do'?'1px solid var(--accent)':behavior[s]==='dont'?'1px solid rgba(255,90,90,.5)':'1px solid rgba(255,255,255,.08)',background:behavior[s]==='do'?'rgba(233,187,95,.08)':behavior[s]==='dont'?'rgba(255,90,90,.06)':'transparent',color:'var(--fg)'}}><strong>{behavior[s]==='do'?'DO · ':behavior[s]==='dont'?'DON’T · ':''}</strong>{s}</button>)}</div></div>
       </section>}
 
       {tab==='COLLABORATE' && <section className="panel">
