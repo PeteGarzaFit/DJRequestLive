@@ -106,6 +106,7 @@ export default function Intelligence(){
   const [librarySummary,setLibrarySummary]=useState(null);
   const [libraryTracks,setLibraryTracks]=useState([]);
   const [libraryBusy,setLibraryBusy]=useState(true);
+  const [knowledgeTracks,setKnowledgeTracks]=useState([]);
   const [mode,setMode]=useState(()=>localStorage.getItem('djrl_si_mode') || 'playlist');
   const [playlist,setPlaylist]=useState(()=>{ try{return JSON.parse(localStorage.getItem('djrl_si_playlist')||'[]')}catch{return[]} });
   const [dragIndex,setDragIndex]=useState(null);
@@ -124,8 +125,9 @@ export default function Intelligence(){
   const loadLibrary = useCallback(async()=>{
     setLibraryBusy(true);
     try{
-      const summary = await api.librarySummary();
+      const [summary, knowledgeResult] = await Promise.all([api.librarySummary(), api.siDjKnowledge({ genre, era: era === 'ALL' ? '' : era, limit: 500 })]);
       setLibrarySummary(summary?.inventory || null);
+      setKnowledgeTracks((knowledgeResult?.tracks || []).map(t => ({...t,bpm:Number(t.bpm)||0,energy:Number(t.energy)||0,dancefloor:Number(t.dancefloor||0),singalong:Number(t.singalong||0),crossgen:Number(t.crossgen||0),knowledge_match:true})));
       if(Number(summary?.inventory?.tracks || 0) > 0){
         const result = await api.librarySearch({ genre: genre === 'West Coast Swing' ? 'West Coast Swing' : genre, limit: 100 });
         setLibraryTracks((result?.tracks || []).map(t=>({
@@ -137,6 +139,7 @@ export default function Intelligence(){
     }catch(e){
       setLibrarySummary(null);
       setLibraryTracks([]);
+      setKnowledgeTracks([]);
       toast(errorText(e));
     }finally{ setLibraryBusy(false); }
   },[genre]);
@@ -173,7 +176,7 @@ export default function Intelligence(){
   const local=useMemo(()=>{
     if(libraryBusy) return [];
     const hasPrivateLibrary = Number(librarySummary?.tracks || 0) > 0;
-    let rows = hasPrivateLibrary ? libraryTracks : songRows();
+    let rows = hasPrivateLibrary ? libraryTracks : (knowledgeTracks.length ? knowledgeTracks : songRows());
     if(artistFilter){
       rows=rows.filter(s=>normalizeArtist(s.artist)===normalizeArtist(artistFilter));
     }else if(query.trim()){
@@ -185,7 +188,7 @@ export default function Intelligence(){
       .sort((a,b)=>b._score-a._score || diversityScore(a,refreshNonce)-diversityScore(b,refreshNonce));
   },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce,libraryBusy,librarySummary,libraryTracks,mode]);
 
-  const suggestionSource = Number(librarySummary?.tracks || 0) > 0 ? 'PRIVATE LIBRARY' : 'SI DJ KNOWLEDGE';
+  const suggestionSource = Number(librarySummary?.tracks || 0) > 0 ? 'PRIVATE LIBRARY + GLOBAL KNOWLEDGE' : (knowledgeTracks.length ? 'SI DJ GLOBAL KNOWLEDGE' : 'SI DJ KNOWLEDGE');
   const bridgeMode = bridge.connected && bridge.nowPlaying ? 'BRIDGE CONNECTED · LIVE TRACK ANCHOR' : 'BRIDGE OFFLINE · MANUAL SUGGESTIONS';
 
   useEffect(()=>{
