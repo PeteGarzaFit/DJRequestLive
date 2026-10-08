@@ -428,9 +428,55 @@ ${JSON.stringify(library)}`;
         const artist = String(url.searchParams.get('artist') || '').trim();
         const genre = String(url.searchParams.get('genre') || '').trim();
         const era = String(url.searchParams.get('era') || '').trim();
+        const fromArtist = String(url.searchParams.get('from_artist') || '').trim();
+        const fromTitle = String(url.searchParams.get('from_title') || '').trim();
         const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 500);
         const tracks = searchSiDjKnowledge({ q, artist, genre, era, limit });
-        return send(res, 200, { knowledge: siDjKnowledgeSummary(), tracks }), true;
+        const learned = await db.all(
+          `SELECT artist,title,play_count,dj_count,last_played
+           FROM si_dj_learning_tracks
+           ORDER BY play_count DESC,last_played DESC
+           LIMIT 1000`
+        );
+        const learnedMap = new Map(learned.map((x) => [normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x]));
+        let transitionMap = new Map();
+        if (fromArtist && fromTitle) {
+          const from = await db.get(
+            'SELECT id FROM si_dj_learning_tracks WHERE artist_key = ? AND title_key = ?',
+            [normalizeLibraryQuery(fromArtist), normalizeLibraryQuery(fromTitle)]
+          );
+          if (from) {
+            const rows = await db.all(
+              `SELECT t.artist,t.title,tr.transition_count,tr.dj_count,tr.last_played
+               FROM si_dj_learning_transitions tr
+               JOIN si_dj_learning_tracks t ON t.id = tr.to_track_id
+               WHERE tr.from_track_id = ?
+               ORDER BY tr.transition_count DESC,tr.dj_count DESC,tr.last_played DESC
+               LIMIT 200`,
+              [from.id]
+            );
+            transitionMap = new Map(rows.map((x) => [normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x]));
+          }
+        }
+        const enriched = tracks.map((track) => {
+          const key = normalizeLibraryQuery(track.artist) + '\\u0000' + normalizeLibraryQuery(track.title);
+          const live = learnedMap.get(key);
+          const transition = transitionMap.get(key);
+          const playCount = Number(live?.play_count || 0);
+          const djCount = Number(live?.dj_count || 0);
+          const transitionCount = Number(transition?.transition_count || 0);
+          return {
+            ...track,
+            live_play_count: playCount,
+            live_dj_count: djCount,
+            live_last_played: Number(live?.last_played || 0),
+            live_transition_count: transitionCount,
+            live_transition_dj_count: Number(transition?.dj_count || 0),
+            live_learning_score: Math.min(40, Math.log1p(playCount) * 4 + Math.log1p(djCount) * 6 + Math.log1p(transitionCount) * 8),
+            live_transition_score: Math.min(35, Math.log1p(transitionCount) * 10 + Math.log1p(Number(transition?.dj_count || 0)) * 6)
+          };
+        });
+        return send(res, 200, { knowledge: { ...siDjKnowledgeSummary(), live_learning: true }, tracks: enriched }), true;
       }
 
       if (path === '/api/library/summary' && method === 'GET') {
