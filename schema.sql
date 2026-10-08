@@ -257,3 +257,50 @@ CREATE TABLE IF NOT EXISTS si_dj_learning_context (
   INDEX idx_si_dj_context_type (event_type,play_count),
   INDEX idx_si_dj_context_moment (event_type,event_moment,play_count)
 ) CHARACTER SET utf8mb4;
+
+
+-- Permanent post-event SI DJ memory. This stores what actually happened at an event
+-- so future SI DJ recommendations can learn from completed performances.
+CREATE TABLE IF NOT EXISTS si_dj_event_memory (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  event_key CHAR(64) NOT NULL,
+  event_type VARCHAR(80) NOT NULL DEFAULT '',
+  event_name VARCHAR(180) NOT NULL DEFAULT '',
+  venue VARCHAR(180) NOT NULL DEFAULT '',
+  event_date DATE NULL,
+  closed_at BIGINT NULL,
+  planned_track_count INT UNSIGNED NOT NULL DEFAULT 0,
+  played_track_count INT UNSIGNED NOT NULL DEFAULT 0,
+  unique_played_count INT UNSIGNED NOT NULL DEFAULT 0,
+  planned_played_count INT UNSIGNED NOT NULL DEFAULT 0,
+  unplanned_played_count INT UNSIGNED NOT NULL DEFAULT 0,
+  completion_pct DECIMAL(5,2) NOT NULL DEFAULT 0,
+  repeat_request_count INT UNSIGNED NOT NULL DEFAULT 0,
+  summary_json TEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_si_dj_event_memory (user_id,event_key),
+  INDEX idx_si_dj_event_memory_type_date (event_type,event_date),
+  INDEX idx_si_dj_event_memory_user_date (user_id,event_date)
+) CHARACTER SET utf8mb4;
+
+CREATE TABLE IF NOT EXISTS si_dj_event_memory_tracks (
+  memory_id BIGINT UNSIGNED NOT NULL,
+  artist_key VARCHAR(255) NOT NULL,
+  title_key VARCHAR(500) NOT NULL,
+  artist VARCHAR(255) NOT NULL DEFAULT '',
+  title VARCHAR(500) NOT NULL DEFAULT '',
+  moments_json TEXT NOT NULL,
+  planned_count INT UNSIGNED NOT NULL DEFAULT 0,
+  played_count INT UNSIGNED NOT NULL DEFAULT 0,
+  request_count INT UNSIGNED NOT NULL DEFAULT 0,
+  first_played BIGINT NULL,
+  last_played BIGINT NULL,
+  PRIMARY KEY (memory_id,artist_key,title_key),
+  FOREIGN KEY (memory_id) REFERENCES si_dj_event_memory(id) ON DELETE CASCADE,
+  INDEX idx_si_dj_event_memory_track (artist_key,title_key),
+  INDEX idx_si_dj_event_memory_track_played (played_count),
+  INDEX idx_si_dj_event_memory_track_requests (request_count)
+) CHARACTER SET utf8mb4;
