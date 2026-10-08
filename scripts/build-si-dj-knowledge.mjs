@@ -10,8 +10,8 @@ const AUDIO_URL = 'https://raw.githubusercontent.com/rfordatascience/tidytuesday
 const norm = (v) => String(v || '').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
 const key = (artist,title) => norm(artist)+'\\u0000'+norm(title);
 
-function clean(v){ return String(v||'').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&nbsp;/g,' ').replace(/\\s+/g,' ').trim(); }
-function cells(row){ return [...row.matchAll(/<t[dh][^>]*>([\\s\\S]*?)<\\/t[dh]>/gi)].map(m=>clean(m[1])); }
+function clean(v){ return String(v||'').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim(); }
+function cells(row){ return [...row.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(m=>clean(m[1])); }
 function parseTables(html){
   return [...String(html||'').matchAll(/<tr[^>]*>([\\s\\S]*?)<\\/tr>/gi)].map(m=>cells(m[1])).filter(r=>r.length>=4);
 }
@@ -31,8 +31,8 @@ function parseCsv(text){
     }else{
       if(ch==='"'){quoted=true;continue;}
       if(ch===','){row.push(field);field='';continue;}
-      if(ch==='\\n'){row.push(field);rows.push(row);row=[];field='';continue;}
-      if(ch==='\\r') continue;
+      if(ch==='\n'){row.push(field);rows.push(row);row=[];field='';continue;}
+      if(ch==='\r') continue;
       field+=ch;
     }
   }
@@ -84,7 +84,7 @@ async function addTexas(url, source){
           const s=ensure(artist,title); if(s){s.texas_t3r_rank=rank;s.texas_t3r_spins=spins;s.texas_score+=Math.max(0,116-rank)*2+spins*0.03;count++;}
         }
       } else {
-        const rank=Number(r[0]); const title=String(r[1]||'').replace(/\\s*TIRC\\s*\\d+$/,'').trim(); const artist=r[2]; const spins=Number(r[3])||0;
+        const rank=Number(r[0]); const title=String(r[1]||'').replace(/\s*TIRC\s*\d+$/,'').trim(); const artist=r[2]; const spins=Number(r[3])||0;
         if(rank>=1 && rank<=75 && title && artist && !/song|artist/i.test(joined)){
           const s=ensure(artist,title); if(s){s.tirc_rank=rank;s.tirc_spins=spins;s.texas_score+=Math.max(0,76-rank)*2+spins*0.5;count++;}
         }
