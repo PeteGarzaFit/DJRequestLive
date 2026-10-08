@@ -483,6 +483,23 @@ ${JSON.stringify(library)}`;
             transitionMap = new Map(rows.map((x) => [normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x]));
           }
         }
+
+        let contextMap = new Map();
+        if (eventType) {
+          const contextRows = await db.all(
+            `SELECT t.artist,t.title,c.play_count,c.dj_count,c.last_played
+             FROM si_dj_learning_context c
+             JOIN si_dj_learning_tracks t ON t.id = c.track_id
+             WHERE c.event_type = ? AND (? = '' OR c.event_moment = ?)
+             ORDER BY c.play_count DESC,c.dj_count DESC,c.last_played DESC
+             LIMIT 1000`,
+            [eventType,fromMoment,fromMoment]
+          );
+          contextMap = new Map(contextRows.map((x) => [
+            normalizeLibraryQuery(x.artist) + '\u0000' + normalizeLibraryQuery(x.title), x
+          ]));
+        }
+
         const enriched = tracks.map((track) => {
           const key = normalizeLibraryQuery(track.artist) + '\\u0000' + normalizeLibraryQuery(track.title);
           const live = learnedMap.get(key);
@@ -490,6 +507,9 @@ ${JSON.stringify(library)}`;
           const playCount = Number(live?.play_count || 0);
           const djCount = Number(live?.dj_count || 0);
           const transitionCount = Number(transition?.transition_count || 0);
+          const context = contextMap.get(key);
+          const contextPlayCount = Number(context?.play_count || 0);
+          const contextDjCount = Number(context?.dj_count || 0);
           return {
             ...track,
             live_play_count: playCount,
@@ -498,7 +518,10 @@ ${JSON.stringify(library)}`;
             live_transition_count: transitionCount,
             live_transition_dj_count: Number(transition?.dj_count || 0),
             live_learning_score: Math.min(40, Math.log1p(playCount) * 4 + Math.log1p(djCount) * 6 + Math.log1p(transitionCount) * 8),
-            live_transition_score: Math.min(35, Math.log1p(transitionCount) * 10 + Math.log1p(Number(transition?.dj_count || 0)) * 6)
+            live_transition_score: Math.min(35, Math.log1p(transitionCount) * 10 + Math.log1p(Number(transition?.dj_count || 0)) * 6),
+            event_play_count: contextPlayCount,
+            event_dj_count: contextDjCount,
+            event_learning_score: Math.min(45, Math.log1p(contextPlayCount) * 7 + Math.log1p(contextDjCount) * 8)
           };
         });
         return send(res, 200, { knowledge: { ...siDjKnowledgeSummary(), live_learning: true }, tracks: enriched }), true;
