@@ -148,5 +148,6 @@ export default function Intelligence(){
         </section>
       </main>
     </div>
+    </div>
   </div>
 }
