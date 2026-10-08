@@ -142,7 +142,7 @@ export default function Intelligence(){
       setKnowledgeTracks([]);
       toast(errorText(e));
     }finally{ setLibraryBusy(false); }
-  },[genre]);
+  },[genre,era]);
   useEffect(()=>{ loadLibrary(); },[loadLibrary]);
   useEffect(()=>{ localStorage.setItem('djrl_si_mode',mode); },[mode]);
   useEffect(()=>{ localStorage.setItem('djrl_si_playlist',JSON.stringify(playlist)); },[playlist]);
@@ -186,7 +186,7 @@ export default function Intelligence(){
     rows=rows.filter(s=>genreMatches(s,genre) && eraMatches(s,era));
     return rows.map(s=>({...s,_score:scoreSong(s,filters,mode==='dj'?bridge.nowPlaying:null)}))
       .sort((a,b)=>b._score-a._score || diversityScore(a,refreshNonce)-diversityScore(b,refreshNonce));
-  },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce,libraryBusy,librarySummary,libraryTracks,mode]);
+  },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce,libraryBusy,librarySummary,libraryTracks,knowledgeTracks,mode]);
 
   const suggestionSource = Number(librarySummary?.tracks || 0) > 0 ? 'PRIVATE LIBRARY + GLOBAL KNOWLEDGE' : (knowledgeTracks.length ? 'SI DJ GLOBAL KNOWLEDGE' : 'SI DJ KNOWLEDGE');
   const bridgeMode = bridge.connected && bridge.nowPlaying ? 'BRIDGE CONNECTED · LIVE TRACK ANCHOR' : 'BRIDGE OFFLINE · MANUAL SUGGESTIONS';
@@ -213,7 +213,7 @@ export default function Intelligence(){
         'Current track:', mode==='dj' && now ? JSON.stringify(now) : 'No current track available.',
         'DJ controls:', JSON.stringify(filters),
         hardFilter ? 'NON-NEGOTIABLE FILTERS: '+hardFilter : 'NON-NEGOTIABLE FILTERS: none',
-        'Candidate library:', JSON.stringify(candidates),
+        'Candidate tracks from '+suggestionSource+':', JSON.stringify(candidates),
         'Return JSON with recommendations: [{title,artist,reason,move}] and no more than 8 recommendations.',
         'Rank the best practical next-track choices first. Favor smooth BPM/genre/energy transitions. Do not invent tracks; use only candidates. Never violate a hard artist, genre, era, or search filter.'
       ].join('\n');
