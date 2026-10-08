@@ -71,3 +71,9 @@ CREATE INDEX IF NOT EXISTS idx_si_dj_play_track ON si_dj_play_history(artist, ti
 CREATE TABLE IF NOT EXISTS si_dj_learning_tracks (id INTEGER PRIMARY KEY AUTOINCREMENT, artist_key TEXT NOT NULL, title_key TEXT NOT NULL, artist TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', play_count INTEGER NOT NULL DEFAULT 0, dj_count INTEGER NOT NULL DEFAULT 0, last_played INTEGER NULL, first_played INTEGER NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (artist_key, title_key));
 CREATE INDEX IF NOT EXISTS idx_si_dj_learning_play_count ON si_dj_learning_tracks(play_count);
 CREATE INDEX IF NOT EXISTS idx_si_dj_learning_last_played ON si_dj_learning_tracks(last_played);
+
+CREATE TABLE IF NOT EXISTS si_dj_learning_track_djs (track_id INTEGER NOT NULL, user_id INTEGER NOT NULL, first_played INTEGER NOT NULL, last_played INTEGER NOT NULL, play_count INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (track_id, user_id));
+CREATE TABLE IF NOT EXISTS si_dj_learning_transitions (from_track_id INTEGER NOT NULL, to_track_id INTEGER NOT NULL, transition_count INTEGER NOT NULL DEFAULT 0, dj_count INTEGER NOT NULL DEFAULT 0, last_played INTEGER NULL, PRIMARY KEY (from_track_id, to_track_id));
+CREATE INDEX IF NOT EXISTS idx_si_dj_transition_count ON si_dj_learning_transitions(transition_count);
+CREATE INDEX IF NOT EXISTS idx_si_dj_transition_to ON si_dj_learning_transitions(to_track_id);
+CREATE TABLE IF NOT EXISTS si_dj_learning_transition_djs (from_track_id INTEGER NOT NULL, to_track_id INTEGER NOT NULL, user_id INTEGER NOT NULL, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, play_count INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (from_track_id, to_track_id, user_id));
