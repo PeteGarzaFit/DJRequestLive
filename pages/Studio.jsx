@@ -24,6 +24,32 @@ async function siDjEventKey(input) {
     return String(h >>> 0).padStart(32, '0');
   }
 }
+function currentEventContext(playedAt) {
+  try {
+    const plan = JSON.parse(localStorage.getItem('djrl_event_curator') || '{}');
+    if (!plan || !plan.eventType) return {};
+    const moments = plan.eventType === 'Wedding'
+      ? ['Pre-Ceremony','Processional','Bride Entrance','Unity / Special Ceremony Song','Recessional','Cocktail','Dinner / Background','Grand Entrance','Bridal Party Entrance','First Dance','Father–Daughter Dance','Mother–Son Dance','Anniversary Dance','Open Dance Floor','Cake Cutting','Bouquet Toss','Garter / Alternative','Toasts / Speeches','Last Dance','Must Play','Do Not Play']
+      : ['Arrival / Cocktail','Dinner / Background','Main Event','Must Play','Do Not Play','Last Songs'];
+    const d = new Date(Number(playedAt) || Date.now());
+    const mins = d.getHours() * 60 + d.getMinutes();
+    const times = plan.timelineTimes || {};
+    const candidates = moments.map(item => {
+      const raw = times[item];
+      if (!raw) return null;
+      const parts = String(raw).split(':').map(Number);
+      if (parts.length !== 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return null;
+      return { item, minutes: parts[0] * 60 + parts[1] };
+    }).filter(Boolean).sort((a,b) => a.minutes - b.minutes);
+    const active = [...candidates].reverse().find(x => x.minutes <= mins);
+    return {
+      event_type: String(plan.eventType || ''),
+      event_moment: active?.item || '',
+      event_key_context: String(plan.name || plan.eventType || '').slice(0,160)
+    };
+  } catch { return {}; }
+}
+
 function bridgePlayedAt(track) {
   const raw = String(track?.raw || '');
   const m = raw.match(/^(\\d{1,2}):(\\d{2})\\s*:/);
@@ -76,7 +102,8 @@ export default function Studio() {
           artist: track.artist,
           title: track.title,
           source: bridge.source || 'bridge',
-          raw: track.raw || ''
+          raw: track.raw || '',
+          ...currentEventContext(playedAt)
         });
 
         if (!alive) return;
