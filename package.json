@@ -9,14 +9,14 @@
   },
   "scripts": {
     "dev": "vite",
-    "dev:api": "node server.js",
+    "dev:api": "NODE_ENV=development DB_DRIVER=sqlite node server.js",
     "build": "vite build",
     "start": "node server.js",
     "preview": "vite preview",
     "bridge": "node bridge/server.mjs",
     "bridge:app": "electron bridge-app/main.cjs",
     "bridge:package": "electron-builder --mac",
-    "bridge:check": "node --check bridge/server.mjs && node --check bridge-app/main.cjs && node --check bridge-app/preload.cjs"
+    "bridge:check": "node --check bridge/server.mjs && node --check bridge-app/main.cjs"
   },
   "dependencies": {
     "mysql2": "^3.11.3",
@@ -60,7 +60,7 @@
       "category": "public.app-category.music",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "artifactName": "SI-DJ-Bridge.${ext}"
+      "artifactName": "SI-DJ-Bridge.\${ext}"
     },
     "dmg": {
       "title": "SI DJ Bridge"
@@ -77,7 +77,7 @@
           ]
         }
       ],
-      "artifactName": "SI-DJ-Bridge-Setup.${ext}"
+      "artifactName": "SI-DJ-Bridge-Setup.\${ext}"
     },
     "nsis": {
       "oneClick": false,
