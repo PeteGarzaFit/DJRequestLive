@@ -91,6 +91,15 @@ const str = (v, max, { min = 0, trim = true } = {}) => {
 };
 const json = (s, fallback) => { try { const v = JSON.parse(s); return v ?? fallback; } catch { return fallback; } };
 const num = (v) => Number(v) || 0;
+const normalizeLibraryQuery = (value) => String(value || '')
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim()
+  .replace(/\s+/g, ' ');
+
 
 export function createApp(db) {
   const mediaUrl = (id) => (id ? `/media/${id}` : null);
@@ -271,6 +280,81 @@ ${JSON.stringify(library)}`;
             return send(res, 503, { error: 'planner_unavailable', message: 'The planner could not generate a safe result from the curated library.' }), true;
           }
         }
+      }
+
+      if (path === '/api/library/summary' && method === 'GET') {
+        const u = await requireUser(req);
+        const totals = await db.get(
+          `SELECT
+             COUNT(*) AS tracks,
+             SUM(CASE WHEN artist <> '' THEN 1 ELSE 0 END) AS artists_known,
+             SUM(CASE WHEN bpm IS NOT NULL THEN 1 ELSE 0 END) AS bpm_known,
+             SUM(CASE WHEN year IS NOT NULL THEN 1 ELSE 0 END) AS years_known,
+             SUM(CASE WHEN duration_seconds IS NOT NULL THEN 1 ELSE 0 END) AS duration_known
+           FROM library_tracks
+           WHERE user_id = ?`,
+          [u.id],
+        );
+        const formats = await db.all(
+          'SELECT file_type, COUNT(*) AS tracks FROM library_tracks WHERE user_id = ? GROUP BY file_type ORDER BY tracks DESC, file_type ASC',
+          [u.id],
+        );
+        const latest = await db.get(
+          'SELECT id, source_file, source_root, scanned_at, row_count, excluded_aliases, source_sha256, created_at FROM library_scans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
+          [u.id],
+        );
+        return send(res, 200, {
+          inventory: {
+            tracks: Number(totals?.tracks || 0),
+            artists_known: Number(totals?.artists_known || 0),
+            bpm_known: Number(totals?.bpm_known || 0),
+            years_known: Number(totals?.years_known || 0),
+            duration_known: Number(totals?.duration_known || 0),
+            formats: formats.map((row) => ({ file_type: row.file_type, tracks: Number(row.tracks || 0) })),
+            latest_scan: latest || null,
+          }
+        }), true;
+      }
+
+      if (path === '/api/library/search' && method === 'GET') {
+        const u = await requireUser(req);
+        const q = String(url.searchParams.get('q') || '').trim();
+        const artist = String(url.searchParams.get('artist') || '').trim();
+        const genre = String(url.searchParams.get('genre') || '').trim();
+        const fileType = String(url.searchParams.get('file_type') || '').trim().toUpperCase();
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 100);
+
+        const where = ['user_id = ?'];
+        const params = [u.id];
+
+        if (q) {
+          const like = '%' + q + '%';
+          where.push('(artist LIKE ? OR title LIKE ? OR album LIKE ? OR artist_key LIKE ? OR title_key LIKE ?)');
+          params.push(like, like, like, '%' + normalizeLibraryQuery(q) + '%', '%' + normalizeLibraryQuery(q) + '%');
+        }
+        if (artist) {
+          where.push('artist_key LIKE ?');
+          params.push('%' + normalizeLibraryQuery(artist) + '%');
+        }
+        if (genre) {
+          where.push('genre LIKE ?');
+          params.push('%' + genre + '%');
+        }
+        if (fileType) {
+          where.push('file_type = ?');
+          params.push(fileType);
+        }
+
+        params.push(limit);
+        const tracks = await db.all(
+          `SELECT id, artist, title, album, genre, bpm, year, file_type, duration_seconds, file_path, metadata_source
+           FROM library_tracks
+           WHERE ${where.join(' AND ')}
+           ORDER BY artist_key ASC, title_key ASC, id ASC
+           LIMIT ?`,
+          params,
+        );
+        return send(res, 200, { tracks }), true;
       }
 
       if (path === '/api/spotify/connect' && method === 'GET') {
