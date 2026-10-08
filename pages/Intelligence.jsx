@@ -126,6 +126,7 @@ export default function Intelligence(){
   },[]);
   useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2000); return()=>clearInterval(t); },[loadBridge]);
 
+  const bridgeTrackKey = (bridge.nowPlaying?.artist || '') + '|' + (bridge.nowPlaying?.title || '');
   const loadLibrary = useCallback(async()=>{
     setLibraryBusy(true);
     try{
@@ -147,7 +148,6 @@ export default function Intelligence(){
       toast(errorText(e));
     }finally{ setLibraryBusy(false); }
   },[genre,era,bridgeTrackKey]);
-  const bridgeTrackKey = (bridge.nowPlaying?.artist || '') + '|' + (bridge.nowPlaying?.title || '');
   useEffect(()=>{ loadLibrary(); },[loadLibrary]);
   useEffect(()=>{ localStorage.setItem('djrl_si_mode',mode); },[mode]);
   useEffect(()=>{ localStorage.setItem('djrl_si_playlist',JSON.stringify(playlist)); },[playlist]);
