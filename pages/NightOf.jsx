@@ -11,14 +11,37 @@ const WEDDING_MOMENTS = [
   ['TOASTS & SPECIALS','Toasts / Speeches','Last Dance','Must Play','Do Not Play'],
 ];
 
-function loadPlan() { try { return JSON.parse(localStorage.getItem('djrl_event_curator') || '{}'); } catch { return {}; } }
+function loadPlan() {
+  try { return JSON.parse(localStorage.getItem('djrl_event_curator') || '{}'); } catch { return {}; }
+}
 function songKey(s) { return String(s?.title || '') + '|' + String(s?.artist || ''); }
+function timeToMinutes(value) {
+  if (!value) return null;
+  const [h,m] = String(value).split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  return h * 60 + m;
+}
+function todayString() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+function formatTime(value) {
+  if (!value) return '';
+  const [h,m] = value.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h,m,0,0);
+  return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+}
 
 export default function NightOf() {
   const [plan] = useState(loadPlan);
-  const [done, setDone] = useState(() => { try { return JSON.parse(localStorage.getItem('djrl_event_night_done') || '{}'); } catch { return {}; } });
+  const [done, setDone] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('djrl_event_night_done') || '{}'); } catch { return {}; }
+  });
   const [nowPlaying, setNowPlaying] = useState(null);
   const [bridge, setBridge] = useState(false);
+  const [clock, setClock] = useState(new Date());
 
   const moments = useMemo(() => plan.eventType === 'Wedding'
     ? WEDDING_MOMENTS.flatMap(([group, ...items]) => items.map(item => ({ group, item })))
@@ -39,6 +62,11 @@ export default function NightOf() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const id = setInterval(() => setClock(new Date()), 10000);
+    return () => clearInterval(id);
+  }, []);
+
   function toggle(key) {
     setDone(x => {
       const next = { ...x, [key]: !x[key] };
@@ -46,13 +74,47 @@ export default function NightOf() {
       return next;
     });
   }
-  function resetNight() { setDone({}); localStorage.removeItem('djrl_event_night_done'); }
+  function resetNight() {
+    setDone({});
+    localStorage.removeItem('djrl_event_night_done');
+  }
 
   const totalItems = moments.reduce((n, m) => n + ((plan.selections || {})[m.item] || []).length, 0);
   const completed = Object.values(done).filter(Boolean).length;
   const progress = totalItems ? Math.min(100, Math.round(completed / totalItems * 100)) : 0;
+
+  const times = plan.timelineTimes || {};
+  const eventDate = plan.details?.eventDate || '';
+  const isEventToday = !eventDate || eventDate === todayString();
+  const currentMinutes = clock.getHours() * 60 + clock.getMinutes();
+
+  const timedMoments = moments
+    .map((m, index) => ({ ...m, index, minutes: timeToMinutes(times[m.item]) }))
+    .filter(m => m.minutes !== null)
+    .sort((a,b) => a.minutes - b.minutes);
+
+  const currentTimed = isEventToday
+    ? [...timedMoments].reverse().find(m => m.minutes <= currentMinutes) || null
+    : null;
+
+  const nextTimed = isEventToday
+    ? timedMoments.find(m => m.minutes > currentMinutes) || null
+    : null;
+
+  const nextPlayable = moments.find(m => (plan.selections?.[m.item] || []).some(s => !done[m.item + '|' + songKey(s)])) || null;
   const currentText = nowPlaying ? songKey(nowPlaying).toLowerCase() : '';
-  const nextMoment = moments.find(m => (plan.selections?.[m.item] || []).some(s => !done[m.item + '|' + songKey(s)])) || moments.find(m => (plan.selections?.[m.item] || []).length);
+
+  const timelineStatus = (m) => {
+    const songs = plan.selections?.[m.item] || [];
+    const sectionDone = songs.length > 0 && songs.every(s => done[m.item + '|' + songKey(s)]);
+    const t = timeToMinutes(times[m.item]);
+    if (sectionDone) return 'complete';
+    if (t !== null && isEventToday && currentMinutes >= t) return 'current';
+    return 'upcoming';
+  };
+
+  const nextMoment = nextTimed || nextPlayable;
+  const liveMoment = currentTimed || null;
 
   return <div className="rl rl-app">
     <div className="wrap wide">
@@ -62,9 +124,12 @@ export default function NightOf() {
       </div>
 
       <section className="panel" style={{marginBottom:16}}>
-        <div className="eyebrow">DJ EVENT MODE</div>
+        <div className="eyebrow">DJ EVENT MODE · NIGHT OF</div>
         <div className="shead" style={{alignItems:'end',gap:16}}>
-          <div><h1 style={{fontSize:34,margin:'6px 0'}}>{plan.name || 'Tonight’s Event'}</h1><p className="hint" style={{margin:0}}>{plan.details?.venue || 'Event venue'}{plan.details?.eventDate ? ' · ' + plan.details.eventDate : ''}</p></div>
+          <div>
+            <h1 style={{fontSize:34,margin:'6px 0'}}>{plan.name || 'Tonight’s Event'}</h1>
+            <p className="hint" style={{margin:0}}>{plan.details?.venue || 'Event venue'}{plan.details?.eventDate ? ' · ' + plan.details.eventDate : ''}</p>
+          </div>
           <div style={{textAlign:'right'}}><div className="ai-pill">{completed} / {totalItems} COMPLETED</div><div className="hint" style={{fontSize:11,marginTop:5}}>{progress}% through planned music</div></div>
         </div>
         <div style={{height:7,borderRadius:99,background:'rgba(255,255,255,.08)',marginTop:15,overflow:'hidden'}}><div style={{height:'100%',width:progress+'%',background:'var(--accent)',transition:'width .2s'}} /></div>
@@ -72,12 +137,46 @@ export default function NightOf() {
 
       <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(280px,360px)',gap:16,alignItems:'start'}}>
         <main>
+          <section className="panel" style={{marginBottom:12}}>
+            <div className="shead" style={{alignItems:'center',gap:12}}>
+              <div>
+                <div className="eyebrow">LIVE TIMELINE</div>
+                <h2 style={{margin:'5px 0'}}>{liveMoment ? liveMoment.item : nextMoment ? 'Next: ' + nextMoment.item : 'Run of Show'}</h2>
+                <p className="hint" style={{marginBottom:0}}>
+                  {liveMoment
+                    ? (times[liveMoment.item] ? formatTime(times[liveMoment.item]) + ' · Current timeline position' : 'Current timeline position')
+                    : isEventToday && timedMoments.length ? 'Waiting for the first scheduled moment.' : 'Add optional times in the Planner to make this timeline time-aware.'}
+                </p>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontSize:12,fontWeight:800,letterSpacing:'.08em',opacity:.65}}>{clock.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</div>
+                <div className="hint" style={{fontSize:10,marginTop:3}}>LOCAL EVENT TIME</div>
+              </div>
+            </div>
+            <div style={{display:'grid',gap:7,marginTop:14}}>
+              {moments.map((m,idx) => {
+                const status = timelineStatus(m);
+                const songs = plan.selections?.[m.item] || [];
+                const t = times[m.item];
+                return <div key={m.item} style={{display:'grid',gridTemplateColumns:'78px minmax(0,1fr) auto',gap:10,alignItems:'center',padding:'10px 11px',borderRadius:9,border:status==='current'?'1px solid var(--accent)':'1px solid rgba(255,255,255,.07)',background:status==='current'?'rgba(233,187,95,.08)':status==='complete'?'rgba(120,220,150,.035)':'rgba(255,255,255,.018)'}}>
+                  <span style={{fontSize:12,fontWeight:800,opacity:.65}}>{t ? formatTime(t) : '—'}</span>
+                  <span><strong>{idx+1}. {m.item}</strong><small style={{display:'block',opacity:.55}}>{songs.length} planned song{songs.length===1?'':'s'}</small></span>
+                  <span className="ai-pill" style={{borderColor:status==='current'?'var(--accent)':'rgba(255,255,255,.12)'}}>{status==='current'?'NOW':status==='complete'?'DONE':'UP NEXT'}</span>
+                </div>;
+              })}
+            </div>
+          </section>
+
           {moments.map((m, idx) => {
             const songs = (plan.selections || {})[m.item] || [];
             if (!songs.length && m.item !== 'Must Play' && m.item !== 'Do Not Play') return null;
             const sectionDone = songs.length > 0 && songs.every(s => done[m.item + '|' + songKey(s)]);
-            return <section className="panel" key={m.item} style={{marginBottom:10,opacity:sectionDone ? .7 : 1}}>
-              <div className="shead" style={{alignItems:'center'}}><div><div className="eyebrow">{m.group}</div><h2 style={{margin:'4px 0'}}>{idx + 1}. {m.item}</h2></div>{sectionDone && <span className="ai-pill">COMPLETE ✓</span>}</div>
+            const status = timelineStatus(m);
+            return <section className="panel" key={m.item} style={{marginBottom:10,opacity:sectionDone ? .7 : 1,border:status==='current'?'1px solid rgba(233,187,95,.55)':undefined}}>
+              <div className="shead" style={{alignItems:'center'}}>
+                <div><div className="eyebrow">{m.group}{times[m.item] ? ' · ' + formatTime(times[m.item]) : ''}</div><h2 style={{margin:'4px 0'}}>{idx + 1}. {m.item}</h2></div>
+                {sectionDone ? <span className="ai-pill">COMPLETE ✓</span> : status==='current' ? <span className="ai-pill">CURRENT</span> : null}
+              </div>
               {songs.length ? <div style={{display:'grid',gap:7,marginTop:10}}>{songs.map((s,i) => {
                 const k = m.item + '|' + songKey(s); const checked = !!done[k]; const playing = currentText && songKey(s).toLowerCase() === currentText;
                 return <button key={k} onClick={() => toggle(k)} style={{display:'grid',gridTemplateColumns:'32px minmax(0,1fr) auto',gap:10,alignItems:'center',textAlign:'left',padding:12,borderRadius:10,border:playing?'1px solid var(--accent)':checked?'1px solid rgba(120,220,150,.35)':'1px solid rgba(255,255,255,.08)',background:playing?'rgba(233,187,95,.09)':checked?'rgba(120,220,150,.05)':'rgba(255,255,255,.02)',color:'var(--fg)',cursor:'pointer'}}>
@@ -92,9 +191,24 @@ export default function NightOf() {
         </main>
 
         <aside style={{position:'sticky',top:12,display:'grid',gap:12}}>
-          <section className="panel"><div className="eyebrow">LIVE CONTROL</div><div style={{marginTop:8,padding:13,borderRadius:10,border:'1px solid '+(bridge?'rgba(120,220,150,.35)':'rgba(255,255,255,.08)'),background:'rgba(255,255,255,.025)'}}><div style={{fontSize:11,fontWeight:800,opacity:.55}}>VIRTUALDJ BRIDGE</div><strong>{bridge?'CONNECTED':'NOT CONNECTED'}</strong>{nowPlaying ? <div style={{marginTop:9}}><div style={{fontSize:11,opacity:.55}}>CURRENTLY PLAYING</div><b>{nowPlaying.title}</b><span style={{display:'block',fontSize:12,opacity:.65}}>{nowPlaying.artist}</span></div> : <p className="hint" style={{fontSize:12,marginBottom:0}}>Connect the DJ Request Live Bridge to see the live track.</p>}</div></section>
-          <section className="panel"><div className="eyebrow">NEXT UP</div>{nextMoment ? <><h2 style={{margin:'5px 0'}}>{nextMoment.item}</h2><p className="hint">{(plan.selections?.[nextMoment.item] || []).length} planned song{(plan.selections?.[nextMoment.item] || []).length===1?'':'s'} remaining.</p></> : <p className="hint">The planned music is complete.</p>}</section>
-          <section className="panel"><div className="eyebrow">EVENT QUICK ACCESS</div><div style={{display:'grid',gap:7,marginTop:10}}><Link className="btn btn-gold btn-block" to="/intelligence">Open SI DJ</Link><Link className="btn btn-ghost btn-block" to="/curate">Open Full Planner</Link></div></section>
+          <section className="panel">
+            <div className="eyebrow">LIVE CONTROL</div>
+            <div style={{marginTop:8,padding:13,borderRadius:10,border:'1px solid '+(bridge?'rgba(120,220,150,.35)':'rgba(255,255,255,.08)'),background:'rgba(255,255,255,.025)'}}>
+              <div style={{fontSize:11,fontWeight:800,opacity:.55}}>VIRTUALDJ BRIDGE</div>
+              <strong>{bridge?'CONNECTED':'NOT CONNECTED'}</strong>
+              {nowPlaying ? <div style={{marginTop:9}}><div style={{fontSize:11,opacity:.55}}>CURRENTLY PLAYING</div><b>{nowPlaying.title}</b><span style={{display:'block',fontSize:12,opacity:.65}}>{nowPlaying.artist}</span></div> : <p className="hint" style={{fontSize:12,marginBottom:0}}>Connect the DJ Request Live Bridge to see the live track.</p>}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="eyebrow">NEXT UP</div>
+            {nextMoment ? <><h2 style={{margin:'5px 0'}}>{nextMoment.item}</h2><p className="hint">{nextTimed ? formatTime(times[nextTimed.item]) + ' · ' : ''}{(plan.selections?.[nextMoment.item] || []).length} planned song{(plan.selections?.[nextMoment.item] || []).length===1?'':'s'}.</p></> : <p className="hint">The planned music is complete.</p>}
+          </section>
+
+          <section className="panel">
+            <div className="eyebrow">EVENT QUICK ACCESS</div>
+            <div style={{display:'grid',gap:7,marginTop:10}}><Link className="btn btn-gold btn-block" to="/intelligence">Open SI DJ</Link><Link className="btn btn-ghost btn-block" to="/curate">Open Full Planner</Link></div>
+          </section>
         </aside>
       </div>
     </div>
