@@ -169,3 +169,75 @@ CREATE TABLE IF NOT EXISTS library_tracks (
   INDEX idx_library_file_type (user_id, file_type),
   INDEX idx_library_scan (user_id, scan_id)
 ) CHARACTER SET utf8mb4;
+
+
+-- Live Bridge play history and anonymized SI DJ learning.
+CREATE TABLE IF NOT EXISTS si_dj_play_history (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  event_key CHAR(64) NOT NULL,
+  played_at BIGINT NOT NULL,
+  artist VARCHAR(255) NOT NULL DEFAULT '',
+  title VARCHAR(500) NOT NULL DEFAULT '',
+  source VARCHAR(60) NOT NULL DEFAULT 'bridge',
+  raw_line VARCHAR(1000) NOT NULL DEFAULT '',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_si_dj_play_event (user_id, event_key),
+  INDEX idx_si_dj_play_user_time (user_id, played_at),
+  INDEX idx_si_dj_play_track (artist, title)
+) CHARACTER SET utf8mb4;
+
+CREATE TABLE IF NOT EXISTS si_dj_learning_tracks (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  artist_key VARCHAR(255) NOT NULL,
+  title_key VARCHAR(500) NOT NULL,
+  artist VARCHAR(255) NOT NULL DEFAULT '',
+  title VARCHAR(500) NOT NULL DEFAULT '',
+  play_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  dj_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  last_played BIGINT NULL,
+  first_played BIGINT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_si_dj_learning_track (artist_key, title_key),
+  INDEX idx_si_dj_learning_play_count (play_count),
+  INDEX idx_si_dj_learning_last_played (last_played)
+) CHARACTER SET utf8mb4;
+
+CREATE TABLE IF NOT EXISTS si_dj_learning_track_djs (
+  track_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  first_played BIGINT NOT NULL,
+  last_played BIGINT NOT NULL,
+  play_count BIGINT UNSIGNED NOT NULL DEFAULT 1,
+  PRIMARY KEY (track_id, user_id),
+  FOREIGN KEY (track_id) REFERENCES si_dj_learning_tracks(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) CHARACTER SET utf8mb4;
+
+CREATE TABLE IF NOT EXISTS si_dj_learning_transitions (
+  from_track_id BIGINT UNSIGNED NOT NULL,
+  to_track_id BIGINT UNSIGNED NOT NULL,
+  transition_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  dj_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  last_played BIGINT NULL,
+  PRIMARY KEY (from_track_id, to_track_id),
+  FOREIGN KEY (from_track_id) REFERENCES si_dj_learning_tracks(id) ON DELETE CASCADE,
+  FOREIGN KEY (to_track_id) REFERENCES si_dj_learning_tracks(id) ON DELETE CASCADE,
+  INDEX idx_si_dj_transition_count (transition_count),
+  INDEX idx_si_dj_transition_to (to_track_id)
+) CHARACTER SET utf8mb4;
+
+CREATE TABLE IF NOT EXISTS si_dj_learning_transition_djs (
+  from_track_id BIGINT UNSIGNED NOT NULL,
+  to_track_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  first_seen BIGINT NOT NULL,
+  last_seen BIGINT NOT NULL,
+  play_count BIGINT UNSIGNED NOT NULL DEFAULT 1,
+  PRIMARY KEY (from_track_id, to_track_id, user_id),
+  FOREIGN KEY (from_track_id) REFERENCES si_dj_learning_tracks(id) ON DELETE CASCADE,
+  FOREIGN KEY (to_track_id) REFERENCES si_dj_learning_tracks(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) CHARACTER SET utf8mb4;
