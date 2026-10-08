@@ -60,7 +60,7 @@
       "category": "public.app-category.music",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "artifactName": "SI-DJ-Bridge.\${ext}"
+      "artifactName": "SI-DJ-Bridge.${ext}"
     },
     "dmg": {
       "title": "SI DJ Bridge"
@@ -77,7 +77,7 @@
           ]
         }
       ],
-      "artifactName": "SI-DJ-Bridge-Setup.\${ext}"
+      "artifactName": "SI-DJ-Bridge-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
