@@ -41,6 +41,7 @@ export default function Curator(){
   const [behavior,setBehavior]=useState({});
   const [bridalParty,setBridalParty]=useState('');
   const [timeline,setTimeline]=useState('');
+  const [spotifyUrl,setSpotifyUrl]=useState('');
 
   const moments=eventType==='Wedding'
     ? WEDDING_MOMENTS.flatMap(([group,...items])=>items.map(item=>({group,item})))
@@ -64,7 +65,7 @@ export default function Curator(){
   function removeSong(song){ setSelections(x=>({...x,[active]:(x[active]||[]).filter(s=>key(s)!==key(song))})); }
   function addIdea(){ const v=idea.trim(); if(!v)return; setGuestIdeas(x=>[...x,{text:v,section:active,from:'Family / Bridal Party'}]); setIdea(''); }
   function save(){
-    localStorage.setItem('djrl_event_curator',JSON.stringify({eventType,name,details,selections,notes,guestIdeas,specialSongs,styles,artists,behavior,bridalParty,timeline}));
+    localStorage.setItem('djrl_event_curator',JSON.stringify({eventType,name,details,selections,notes,guestIdeas,specialSongs,styles,artists,behavior,bridalParty,timeline,spotifyUrl}));
     setSaved(true); setTimeout(()=>setSaved(false),1600);
   }
   function toggleStyle(s){ setStyles(x=>({...x,[s]:x[s]==='like'?'dislike':x[s]==='dislike'?undefined:'like'})); }
@@ -113,6 +114,13 @@ export default function Curator(){
           <p className="hint">The original DJ planning form collected key family contacts and identified one primary person who knows the couple's wishes.</p>
           <textarea className="input" rows="5" value={timeline} onChange={e=>setTimeline(e.target.value)} placeholder="Bride / Groom / parents / coordinator names and phone numbers…" />
         </div>}
+        <div className="panel" style={{marginTop:16,background:'rgba(255,255,255,.025)'}}>
+          <div className="eyebrow">STARTING PLAYLIST</div>
+          <h3 style={{margin:'5px 0'}}>Already have a Spotify playlist?</h3>
+          <p className="hint">Paste the playlist link here. It can become the couple's starting point while SI DJ checks the songs against the DJ's actual library.</p>
+          <input className="input" value={spotifyUrl} onChange={e=>setSpotifyUrl(e.target.value)} placeholder="Paste Spotify playlist link…" />
+          {spotifyUrl && <p className="hint" style={{fontSize:11,marginBottom:0}}>Playlist linked to this event. Later, SI DJ can reconcile it against the available DJ files and flag anything missing.</p>}
+        </div>
         <div className="field" style={{marginTop:16}}><label>Anything the DJ should know?</label><textarea className="input" rows="4" value={details.specialNotes} onChange={e=>setDetail('specialNotes',e.target.value)} placeholder="Accessibility, venue restrictions, family dynamics, cultural details, surprises, etc." /></div>
       </section>}
 
@@ -195,7 +203,7 @@ export default function Curator(){
         <p className="hint">This is the foundation for the hosted event link: the host will eventually invite family, bridal party or other collaborators to contribute from their phones.</p>
         <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(260px,360px)',gap:16,marginTop:16}}>
           <div><div className="field"><label>Suggestion for {active}</label><input className="input" value={idea} onChange={e=>setIdea(e.target.value)} placeholder="Artist — Song" onKeyDown={e=>e.key==='Enter'&&addIdea()} /></div><button className="btn btn-gold" onClick={addIdea}>Add suggestion</button><div style={{display:'grid',gap:7,marginTop:12}}>{guestIdeas.map((x,i)=><div key={i} style={{padding:'11px 12px',border:'1px solid rgba(255,255,255,.08)',borderRadius:9}}><b>{x.text}</b><small style={{display:'block',opacity:.6}}>{x.section} · {x.from}</small></div>)}{!guestIdeas.length&&<p className="hint">No suggestions yet.</p>}</div></div>
-          <div className="panel" style={{background:'rgba(255,255,255,.025)'}}><div className="eyebrow">WHAT THE DJ GETS</div><p className="hint">One event plan containing the timeline, special songs, must-play and do-not-play lists, style preferences, family input and operational notes.</p><button className="btn btn-gold btn-block" onClick={save}>{saved?'Plan Saved ✓':'Save Event Plan'}</button><p className="hint" style={{fontSize:11}}>Hosted invitations, permissions and a shareable event URL are the next persistence layer.</p></div>
+          <div className="panel" style={{background:'rgba(255,255,255,.025)'}}><div className="eyebrow">WHAT THE DJ GETS</div><p className="hint">One event plan containing the timeline, special songs, must-play and do-not-play lists, style preferences, family input, operational notes{spotifyUrl ? ' and a linked Spotify starting playlist.' : '.'}</p><button className="btn btn-gold btn-block" onClick={save}>{saved?'Plan Saved ✓':'Save Event Plan'}</button><p className="hint" style={{fontSize:11}}>Hosted invitations, permissions and a shareable event URL are the next persistence layer.</p></div>
         </div>
       </section>}
     </div>
