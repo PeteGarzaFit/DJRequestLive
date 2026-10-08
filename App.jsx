@@ -5,6 +5,7 @@ import Auth from './pages/Auth.jsx';
 import Studio from './pages/Studio.jsx';
 import Guest from './pages/Guest.jsx';
 import BridgeDownload from './pages/BridgeDownload.jsx';
+import Intelligence from './pages/Intelligence.jsx';
 import Toaster from './components/Toaster.jsx';
 
 function GuestRoute() {
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/login" element={<Auth mode="login" />} />
         <Route path="/studio" element={<Studio />} />
         <Route path="/bridge" element={<BridgeDownload />} />
+        <Route path="/intelligence" element={<Intelligence />} />
         <Route path="/dashboard" element={<Navigate to="/studio" replace />} />
         <Route path="/:slug" element={<GuestRoute />} />
       </Routes>
