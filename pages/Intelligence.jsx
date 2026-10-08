@@ -106,6 +106,9 @@ export default function Intelligence(){
   const [librarySummary,setLibrarySummary]=useState(null);
   const [libraryTracks,setLibraryTracks]=useState([]);
   const [libraryBusy,setLibraryBusy]=useState(true);
+  const [mode,setMode]=useState(()=>localStorage.getItem('djrl_si_mode') || 'playlist');
+  const [playlist,setPlaylist]=useState(()=>{ try{return JSON.parse(localStorage.getItem('djrl_si_playlist')||'[]')}catch{return[]} });
+  const [dragIndex,setDragIndex]=useState(null);
 
   const loadBridge=useCallback(async()=>{
     try{
@@ -138,8 +141,28 @@ export default function Intelligence(){
     }finally{ setLibraryBusy(false); }
   },[genre]);
   useEffect(()=>{ loadLibrary(); },[loadLibrary]);
+  useEffect(()=>{ localStorage.setItem('djrl_si_mode',mode); },[mode]);
+  useEffect(()=>{ localStorage.setItem('djrl_si_playlist',JSON.stringify(playlist)); },[playlist]);
 
   const filters={genre,vibe,era};
+  const addToPlaylist = useCallback((track)=>{
+    const key=songKey(track);
+    setPlaylist(current=>current.some(x=>songKey(x)===key) ? current : [...current,{title:track.title,artist:track.artist,bpm:track.bpm,genre:track.genre,era:track.era}]);
+    toast(playlist.some(x=>songKey(x)===key) ? 'Already in playlist.' : 'Added to playlist.');
+  },[playlist]);
+  const removeFromPlaylist = useCallback((index)=>{
+    setPlaylist(current=>current.filter((_,i)=>i!==index));
+  },[]);
+  const movePlaylistItem = useCallback((from,to)=>{
+    setPlaylist(current=>{
+      if(to<0 || to>=current.length || from===to) return current;
+      const next=[...current]; const [item]=next.splice(from,1); next.splice(to,0,item); return next;
+    });
+  },[]);
+  const clearPlaylist = useCallback(()=>{
+    setPlaylist([]);
+    toast('Playlist cleared.');
+  },[]);
   const artistFilter = useMemo(()=>{
     const q = query.trim();
     if(!q) return '';
@@ -158,9 +181,9 @@ export default function Intelligence(){
       rows=rows.filter(s=>normalizeText(haystack(s)).includes(q));
     }
     rows=rows.filter(s=>genreMatches(s,genre) && eraMatches(s,era));
-    return rows.map(s=>({...s,_score:scoreSong(s,filters,bridge.nowPlaying)}))
+    return rows.map(s=>({...s,_score:scoreSong(s,filters,mode==='dj'?bridge.nowPlaying:null)}))
       .sort((a,b)=>b._score-a._score || diversityScore(a,refreshNonce)-diversityScore(b,refreshNonce));
-  },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce,libraryBusy,librarySummary,libraryTracks]);
+  },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce,libraryBusy,librarySummary,libraryTracks,mode]);
 
   const suggestionSource = Number(librarySummary?.tracks || 0) > 0 ? 'PRIVATE LIBRARY' : 'SI DJ KNOWLEDGE';
   const bridgeMode = bridge.connected && bridge.nowPlaying ? 'BRIDGE CONNECTED · LIVE TRACK ANCHOR' : 'BRIDGE OFFLINE · MANUAL SUGGESTIONS';
@@ -183,8 +206,8 @@ export default function Intelligence(){
       ].filter(Boolean).join(' | ');
       const prompt=[
         'SUPER INTELLIGENCE DJ TRACK FINDER.',
-        'The DJ is choosing the NEXT track, not planning an event.',
-        'Current track:', now ? JSON.stringify(now) : 'No current track available.',
+        mode==='dj' ? 'The DJ is choosing the NEXT track, not planning an event.' : 'The user is building a playlist; do not assume a live current track.',
+        'Current track:', mode==='dj' && now ? JSON.stringify(now) : 'No current track available.',
         'DJ controls:', JSON.stringify(filters),
         hardFilter ? 'NON-NEGOTIABLE FILTERS: '+hardFilter : 'NON-NEGOTIABLE FILTERS: none',
         'Candidate library:', JSON.stringify(candidates),
@@ -197,7 +220,7 @@ export default function Intelligence(){
       if(!recs.length) toast('SI DJ did not return recommendations. The local ranked library is still ready.');
     }catch(e){ toast(errorText(e)); }
     finally{setAiBusy(false);}
-  },[bridge.nowPlaying,filters,local,artistFilter,query]);
+  },[bridge.nowPlaying,filters,local,artistFilter,query,mode]);
 
   const aiMap = useMemo(()=>{
     const map = new Map();
@@ -233,7 +256,7 @@ export default function Intelligence(){
     </div>
 
     <section className="panel" style={{position:'sticky',top:10,zIndex:20,backdropFilter:'blur(18px)',background:'rgba(14,17,24,.94)',borderColor:bridge.connected?'rgba(34,197,94,.45)':'rgba(255,255,255,.12)'}}>
-      <div className="eyebrow">{bridge.connected ? '● NOW PLAYING · BRIDGE CONNECTED' : 'NOW PLAYING · BRIDGE OFFLINE'}</div>
+      <div className="eyebrow">{mode==='dj' ? (bridge.connected ? '● DJ MODE · BRIDGE CONNECTED' : 'DJ MODE · BRIDGE OFFLINE') : 'PLAYLIST MODE · BRIDGE NOT REQUIRED'}</div>
       <div style={{display:'flex',justifyContent:'space-between',gap:18,alignItems:'center',marginTop:7,flexWrap:'wrap'}}>
         <div><h1 style={{fontSize:26,margin:'0 0 4px'}}>{bridge.nowPlaying?.title || 'Waiting for current track'}</h1><div className="hint" style={{fontSize:15}}>{bridge.nowPlaying ? [bridge.nowPlaying.artist,bridge.nowPlaying.genre,bridge.nowPlaying.bpm ? bridge.nowPlaying.bpm+' BPM':'',bridge.nowPlaying.key].filter(Boolean).join(' · ') : bridge.error}</div></div>
         <div className="eyebrow">SOURCE<br/><strong style={{fontSize:13}}>{bridge.source || '—'}</strong></div>
@@ -243,8 +266,16 @@ export default function Intelligence(){
     <div style={{display:'grid',gridTemplateColumns:'minmax(330px,390px) minmax(0,1fr)',gap:18,alignItems:'start',marginTop:18}}>
       <aside className="panel" style={{position:'sticky',top:128}}>
         <div className="eyebrow">SUPER INTELLIGENCE DJ</div>
-        <h2 style={{margin:'6px 0 4px'}}>Steer the next track</h2>
-        <p className="hint" style={{marginTop:0}}>Choose a lane. SI DJ can suggest tracks with or without the Bridge. When the Bridge is connected, the current track becomes the transition anchor.</p>
+        <h2 style={{margin:'6px 0 4px'}}>{mode==='dj'?'DJ MODE':'PLAYLIST MODE'}</h2>
+        <p className="hint" style={{marginTop:0}}>{mode==='dj'?'Live next-track intelligence. The Bridge is optional, but when connected it anchors recommendations to what is playing now.':'Build a party playlist without a DJ setup or Bridge. Add tracks below, then reorder them into the exact flow you want.'}</p>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginTop:14,padding:4,borderRadius:10,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.10)'}}>
+          {[
+            ['playlist','PLAYLIST MODE','No Bridge required'],
+            ['dj','DJ MODE',bridge.connected?'Bridge connected':'Bridge optional']
+          ].map(([key,label,sub])=><button key={key} onClick={()=>setMode(key)} style={{padding:'10px 8px',borderRadius:7,border:mode===key?'1px solid var(--accent)':'1px solid transparent',background:mode===key?'rgba(255,255,255,.10)':'transparent',color:'var(--fg)',cursor:'pointer',fontWeight:900}}>
+            {label}<small style={{display:'block',fontWeight:600,opacity:.62,marginTop:3}}>{sub}</small>
+          </button>)}
+        </div>
         <div className="eyebrow" style={{marginTop:20}}>GENRE</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
           {GENRES.map(([g,c])=><button key={g} onClick={()=>{setGenre(current=>current===g?'':g);setAi([])}} style={{minHeight:48,textAlign:'left',padding:'10px 12px',borderRadius:9,border:genre===g?'2px solid '+c:'1px solid '+c+'66',background:genre===g?c+'30':'rgba(255,255,255,.035)',color:'var(--fg)',boxShadow:genre===g?'0 0 18px '+c+'38':'none',fontWeight:800,cursor:'pointer'}}>{g}</button>)}
@@ -257,18 +288,18 @@ export default function Intelligence(){
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginTop:8}}>
           {ERAS.map(e=><button key={e} onClick={()=>{setEra(e);setAi([])}} style={{padding:'10px 5px',borderRadius:8,border:era===e?'2px solid var(--accent)':'1px solid rgba(255,255,255,.12)',background:era===e?'rgba(255,255,255,.10)':'rgba(255,255,255,.03)',color:'var(--fg)',fontSize:11,fontWeight:800,cursor:'pointer'}}>{e}</button>)}
         </div>
-        <button className="btn btn-gold btn-block" style={{marginTop:18}} onClick={askAI} disabled={aiBusy}>{aiBusy?'SI DJ is finding the best moves…':'Ask SI DJ for the best next tracks →'}</button>
+        {mode==='dj' && <button className="btn btn-gold btn-block" style={{marginTop:18}} onClick={askAI} disabled={aiBusy}>{aiBusy?'SI DJ is finding the best moves…':'Ask SI DJ for the best next tracks →'}</button>}
       </aside>
 
       <main>
         <section className="panel">
-          <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>Your next-track shortlist</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · ranked against the current track</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{ai.length?'AI RANKED':suggestionSource}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
+          <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>{mode==='dj'?'Your next-track shortlist':'Build your party playlist'}</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · {mode==='dj'?'ranked against the current track':'add songs, then arrange the order'}</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{mode==='dj' && ai.length?'AI RANKED':suggestionSource}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
           <div className="field" style={{marginTop:14}}><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search artist or song…" /></div>
           <div style={{display:'grid',gap:9,marginTop:12}}>
             {display.map((s,i)=><article key={(s.title||'')+'|'+(s.artist||'')+'|'+i} style={{display:'grid',gridTemplateColumns:'44px minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'13px 14px',border:'1px solid rgba(255,255,255,.09)',borderRadius:12,background:'rgba(255,255,255,.025)'}}>
               <strong style={{fontSize:18,opacity:.65}}>{String(i+1).padStart(2,'0')}</strong>
               <div><strong style={{display:'block'}}>{s.title}</strong><span>{s.artist}</span><small style={{display:'block',marginTop:3}}>{s.reason || [s.genre,s.era,s.bpm?s.bpm+' BPM':''].filter(Boolean).join(' · ')}</small></div>
-              <div style={{textAlign:'right'}}><b>{s.bpm ? s.bpm+' BPM' : ''}</b>{s.move && <small style={{display:'block'}}>{s.move}</small>}<button className="btn btn-ghost btn-sm" style={{marginTop:5}} onClick={()=>navigator.clipboard?.writeText((s.title||'')+' — '+(s.artist||''))}>Copy</button></div>
+              <div style={{textAlign:'right'}}><b>{s.bpm ? s.bpm+' BPM' : ''}</b>{s.move && <small style={{display:'block'}}>{s.move}</small>}<div style={{display:'flex',gap:5,justifyContent:'flex-end',marginTop:5}}>{mode==='playlist' && <button className="btn btn-gold btn-sm" onClick={()=>addToPlaylist(s)} disabled={playlist.some(x=>songKey(x)===songKey(s))}>{playlist.some(x=>songKey(x)===songKey(s))?'Added':'Add'}</button>}<button className="btn btn-ghost btn-sm" onClick={()=>navigator.clipboard?.writeText((s.title||'')+' — '+(s.artist||''))}>Copy</button></div></div>
             </article>)}
           </div>
           {!display.length && libraryBusy && <p className="hint">Checking your private SI DJ library…</p>}
@@ -277,6 +308,24 @@ export default function Intelligence(){
           {display.length < displayPool.length && <button className="btn btn-ghost btn-block" style={{marginTop:12}} onClick={()=>setVisibleCount(n=>Math.min(n+10,displayPool.length))}>MORE TRACKS →</button>}
           {display.length >= displayPool.length && displayPool.length > 0 && <p className="hint" style={{marginTop:10}}>Showing all {displayPool.length} matching tracks — no unrelated songs added.</p>}
         </section>
+        {mode==='playlist' && <section className="panel" style={{marginTop:18}}>
+          <div className="shead">
+            <div><div className="eyebrow">MY PARTY PLAYLIST</div><h2 style={{margin:'5px 0 0'}}>{playlist.length} TRACKS</h2><p className="hint" style={{marginTop:4}}>Drag tracks to reorder them, or use the arrows. This order is saved on this device.</p></div>
+            {playlist.length>0 && <button className="btn btn-ghost btn-sm" onClick={clearPlaylist}>CLEAR</button>}
+          </div>
+          {!playlist.length && <div style={{padding:'22px 8px',textAlign:'center',border:'1px dashed rgba(255,255,255,.14)',borderRadius:10,marginTop:12}}><strong>Your playlist is empty</strong><p className="hint" style={{margin:'5px 0 0'}}>Click ADD on any SI DJ suggestion above.</p></div>}
+          <div style={{display:'grid',gap:7,marginTop:12}}>
+            {playlist.map((s,i)=><div key={songKey(s)+'|'+i} draggable onDragStart={()=>setDragIndex(i)} onDragOver={e=>e.preventDefault()} onDrop={()=>{if(dragIndex!==null) movePlaylistItem(dragIndex,i);setDragIndex(null)}} style={{display:'grid',gridTemplateColumns:'34px minmax(0,1fr) auto',gap:9,alignItems:'center',padding:'10px 11px',border:'1px solid rgba(255,255,255,.09)',borderRadius:9,background:dragIndex===i?'rgba(255,255,255,.09)':'rgba(255,255,255,.025)',cursor:'grab'}}>
+              <strong style={{opacity:.55}}>{String(i+1).padStart(2,'0')}</strong>
+              <div><strong>{s.title}</strong><span style={{display:'block',opacity:.72}}>{s.artist}</span></div>
+              <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                <button className="btn btn-ghost btn-sm" disabled={i===0} onClick={()=>movePlaylistItem(i,i-1)}>↑</button>
+                <button className="btn btn-ghost btn-sm" disabled={i===playlist.length-1} onClick={()=>movePlaylistItem(i,i+1)}>↓</button>
+                <button className="btn btn-ghost btn-sm" onClick={()=>removeFromPlaylist(i)}>Remove</button>
+              </div>
+            </div>)}
+          </div>
+        </section>}
         <section className="panel" style={{marginTop:18}}>
           <div className="eyebrow">WHY THIS WORKS</div>
           <h2 style={{margin:'5px 0'}}>Stop digging through crates.</h2>
