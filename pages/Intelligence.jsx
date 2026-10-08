@@ -143,9 +143,9 @@ export default function Intelligence(){
   const artistFilter = useMemo(()=>{
     const q = query.trim();
     if(!q) return '';
-    const artists = [...new Set(songRows().map(s=>s.artist))];
+    const artists = [...new Set(libraryTracks.map(s=>s.artist).filter(Boolean))];
     return artists.find(name=>artistMatches(name,q)) || '';
-  },[query]);
+  },[query,libraryTracks]);
 
   const local=useMemo(()=>{
     if(libraryBusy || !Number(librarySummary?.tracks || 0)) return [];
@@ -213,6 +213,14 @@ export default function Intelligence(){
     return [...aiFirst,...rest];
   },[ai,aiMap,local]);
 
+  const handleRefresh = useCallback(async()=>{
+    setAi([]);
+    setVisibleCount(10);
+    setRefreshNonce(n=>n+1);
+    await loadLibrary();
+    toast('SI DJ list refreshed.');
+  },[loadLibrary]);
+
   const display = displayPool.slice(0,visibleCount);
   return <div className="rl rl-app"><div className="wrap wide">
     <div className="shead" style={{marginBottom:12}}>
@@ -250,7 +258,7 @@ export default function Intelligence(){
 
       <main>
         <section className="panel">
-          <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>Your next-track shortlist</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · ranked against the current track</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{ai.length?'AI RANKED':'LIBRARY RANKED'}</span><button className="btn btn-ghost btn-sm" onClick={()=>{setAi([]);setVisibleCount(10);setRefreshNonce(n=>n+1)}}>REFRESH LIST ↻</button></div></div>
+          <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>Your next-track shortlist</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · ranked against the current track</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{ai.length?'AI RANKED':'LIBRARY RANKED'}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
           <div className="field" style={{marginTop:14}}><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search artist or song…" /></div>
           <div style={{display:'grid',gap:9,marginTop:12}}>
             {display.map((s,i)=><article key={(s.title||'')+'|'+(s.artist||'')+'|'+i} style={{display:'grid',gridTemplateColumns:'44px minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'13px 14px',border:'1px solid rgba(255,255,255,.09)',borderRadius:12,background:'rgba(255,255,255,.025)'}}>
