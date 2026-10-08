@@ -121,6 +121,121 @@ export function createApp(db) {
     );
   }
   const requireUser = async (req) => { const u = await userFromRequest(req); if (!u) throw bad('not_signed_in', 401); return u; };
+  async function recordSiDjBridgePlay(u, b) {
+    const artist = str(b.artist || '', 255);
+    const title = str(b.title || '', 500);
+    if (!artist || !title) throw bad('invalid_field');
+    const eventKey = str(b.event_key || '', 64, { min: 32 });
+    const playedAt = Math.max(0, Number(b.played_at) || Date.now());
+    const source = str(b.source || 'bridge', 60);
+    const raw = str(b.raw || '', 1000);
+
+    try {
+      await db.run(
+        'INSERT INTO si_dj_play_history (user_id,event_key,played_at,artist,title,source,raw_line,created_at) VALUES (?,?,?,?,?,?,?,?)',
+        [u.id,eventKey,playedAt,artist,title,source,raw,Date.now()]
+      );
+    } catch (e) {
+      if (/duplicate|unique/i.test(String(e?.message || e?.code || ''))) {
+        return { recorded: false, duplicate: true };
+      }
+      throw e;
+    }
+
+    const artistKey = normalizeLibraryQuery(artist);
+    const titleKey = normalizeLibraryQuery(title);
+    let track = await db.get(
+      'SELECT * FROM si_dj_learning_tracks WHERE artist_key = ? AND title_key = ?',
+      [artistKey, titleKey]
+    );
+
+    if (!track) {
+      const made = await db.run(
+        'INSERT INTO si_dj_learning_tracks (artist_key,title_key,artist,title,play_count,dj_count,last_played,first_played,created_at,updated_at) VALUES (?,?,?,?,1,0,?,?,?,?)',
+        [artistKey,titleKey,artist,title,playedAt,playedAt,Date.now(),Date.now()]
+      );
+      track = await db.get('SELECT * FROM si_dj_learning_tracks WHERE id = ?', [made.insertId]);
+    } else {
+      await db.run(
+        'UPDATE si_dj_learning_tracks SET play_count = play_count + 1, last_played = ?, updated_at = ? WHERE id = ?',
+        [playedAt,Date.now(),track.id]
+      );
+    }
+
+    const knownDj = await db.get(
+      'SELECT track_id FROM si_dj_learning_track_djs WHERE track_id = ? AND user_id = ?',
+      [track.id,u.id]
+    );
+    if (knownDj) {
+      await db.run(
+        'UPDATE si_dj_learning_track_djs SET play_count = play_count + 1, last_played = ? WHERE track_id = ? AND user_id = ?',
+        [playedAt,track.id,u.id]
+      );
+    } else {
+      await db.run(
+        'INSERT INTO si_dj_learning_track_djs (track_id,user_id,first_played,last_played,play_count) VALUES (?,?,?,?,1)',
+        [track.id,u.id,playedAt,playedAt]
+      );
+      await db.run('UPDATE si_dj_learning_tracks SET dj_count = dj_count + 1 WHERE id = ?', [track.id]);
+    }
+
+    const previous = await db.get(
+      'SELECT artist,title,played_at FROM si_dj_play_history WHERE user_id = ? ORDER BY played_at DESC,id DESC LIMIT 1 OFFSET 1',
+      [u.id]
+    );
+    let transition = null;
+    if (previous) {
+      const from = await db.get(
+        'SELECT id FROM si_dj_learning_tracks WHERE artist_key = ? AND title_key = ?',
+        [normalizeLibraryQuery(previous.artist),normalizeLibraryQuery(previous.title)]
+      );
+      if (from && Number(from.id) !== Number(track.id)) {
+        const existing = await db.get(
+          'SELECT * FROM si_dj_learning_transitions WHERE from_track_id = ? AND to_track_id = ?',
+          [from.id,track.id]
+        );
+        if (existing) {
+          await db.run(
+            'UPDATE si_dj_learning_transitions SET transition_count = transition_count + 1, last_played = ? WHERE from_track_id = ? AND to_track_id = ?',
+            [playedAt,from.id,track.id]
+          );
+        } else {
+          await db.run(
+            'INSERT INTO si_dj_learning_transitions (from_track_id,to_track_id,transition_count,dj_count,last_played) VALUES (?,?,1,0,?)',
+            [from.id,track.id,playedAt]
+          );
+        }
+        const tdj = await db.get(
+          'SELECT * FROM si_dj_learning_transition_djs WHERE from_track_id = ? AND to_track_id = ? AND user_id = ?',
+          [from.id,track.id,u.id]
+        );
+        if (tdj) {
+          await db.run(
+            'UPDATE si_dj_learning_transition_djs SET play_count = play_count + 1,last_seen = ? WHERE from_track_id = ? AND to_track_id = ? AND user_id = ?',
+            [playedAt,from.id,track.id,u.id]
+          );
+        } else {
+          await db.run(
+            'INSERT INTO si_dj_learning_transition_djs (from_track_id,to_track_id,user_id,first_seen,last_seen,play_count) VALUES (?,?,?,?,?,1)',
+            [from.id,track.id,u.id,playedAt,playedAt]
+          );
+          await db.run(
+            'UPDATE si_dj_learning_transitions SET dj_count = dj_count + 1 WHERE from_track_id = ? AND to_track_id = ?',
+            [from.id,track.id]
+          );
+        }
+        transition = { from_artist: previous.artist, from_title: previous.title, to_artist: artist, to_title: title };
+      }
+    }
+
+    return {
+      recorded: true,
+      duplicate: false,
+      track: { artist, title, play_count: Number(track.play_count || 0) + 1, dj_count: Number(track.dj_count || 0) + (knownDj ? 0 : 1) },
+      transition
+    };
+  }
+
 
   async function startSession(req, res, userId, status, body) {
     const token = newToken();
@@ -281,6 +396,29 @@ ${JSON.stringify(library)}`;
             return send(res, 503, { error: 'planner_unavailable', message: 'The planner could not generate a safe result from the curated library.' }), true;
           }
         }
+      }
+
+
+      if (path === '/api/si-dj/plays' && method === 'POST') {
+        const u = await requireUser(req);
+        const b = await readJson(req);
+        const result = await recordSiDjBridgePlay(u, b);
+        return send(res, 200, result), true;
+      }
+
+      if (path === '/api/si-dj/learning' && method === 'GET') {
+        await requireUser(req);
+        const q = normalizeLibraryQuery(url.searchParams.get('q') || '');
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 200);
+        const rows = await db.all(
+          `SELECT artist,title,play_count,dj_count,last_played
+           FROM si_dj_learning_tracks
+           WHERE (? = '' OR artist_key LIKE ? OR title_key LIKE ?)
+           ORDER BY play_count DESC,last_played DESC
+           LIMIT ?`,
+          [q,'%' + q + '%','%' + q + '%',limit]
+        );
+        return send(res, 200, { learning: rows }), true;
       }
 
       if (path === '/api/si-dj/knowledge' && method === 'GET') {
