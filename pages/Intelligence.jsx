@@ -17,6 +17,21 @@ const VIBES = [
 ];
 const ERAS = ['ALL','CURRENT','2020s','2010s','2000s','90s','80s','70s','CLASSICS'];
 
+function currentEventContext() {
+  try {
+    const plan = JSON.parse(localStorage.getItem('djrl_event_curator') || '{}');
+    if (!plan?.eventType) return {};
+    const now = new Date();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const times = plan.timelineTimes || {};
+    const active = Object.entries(times).map(([item,value]) => {
+      const [h,m] = String(value || '').split(':').map(Number);
+      return Number.isFinite(h) && Number.isFinite(m) ? {item,minutes:h*60+m} : null;
+    }).filter(Boolean).sort((a,b)=>a.minutes-b.minutes).reverse().find(x=>x.minutes<=mins);
+    return { event_type: String(plan.eventType), event_moment: active?.item || '' };
+  } catch { return {}; }
+}
+
 function normalizeText(value){
   return String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 }
@@ -93,6 +108,7 @@ function scoreSong(s, filters, now){
   if (s.texas_score) score += Math.min(18, Number(s.texas_score || 0) / 25);
   if (s.live_learning_score) score += Math.min(20, Number(s.live_learning_score || 0));
   if (s.live_transition_score) score += Math.min(30, Number(s.live_transition_score || 0));
+  if (s.event_learning_score) score += Math.min(35, Number(s.event_learning_score || 0));
   if (now?.title && s.title.toLowerCase() === String(now.title).toLowerCase()) score -= 100;
   return score;
 }
@@ -130,7 +146,7 @@ export default function Intelligence(){
   const loadLibrary = useCallback(async()=>{
     setLibraryBusy(true);
     try{
-      const [summary, knowledgeResult] = await Promise.all([api.librarySummary(), api.siDjKnowledge({ genre, era: era === 'ALL' ? '' : era, from_artist: bridge.nowPlaying?.artist || '', from_title: bridge.nowPlaying?.title || '', limit: 500 })]);
+      const [summary, knowledgeResult] = await Promise.all([api.librarySummary(), api.siDjKnowledge({ ...currentEventContext(), genre, era: era === 'ALL' ? '' : era, from_artist: bridge.nowPlaying?.artist || '', from_title: bridge.nowPlaying?.title || '', limit: 500 })]);
       setLibrarySummary(summary?.inventory || null);
       setKnowledgeTracks((knowledgeResult?.tracks || []).map(t => ({...t,bpm:Number(t.bpm)||0,energy:Number(t.energy)||0,dancefloor:Number(t.dancefloor||0),singalong:Number(t.singalong||0),crossgen:Number(t.crossgen||0),knowledge_match:true})));
       if(Number(summary?.inventory?.tracks || 0) > 0){
