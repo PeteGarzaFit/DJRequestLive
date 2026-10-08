@@ -13,6 +13,27 @@ import Intelligence from './Intelligence.jsx';
 const TABS = [['intelligence', 'SUPER INTELLIGENCE'], ['queue', 'SI QUE'], ['planner', 'AI Planner'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
 const FILTERS = [['new', 'New'], ['approved', 'Approved'], ['played', 'Played'], ['declined', 'Declined']];
 const ORIGIN = () => window.location.origin;
+async function siDjEventKey(input) {
+  try {
+    const bytes = new TextEncoder().encode(input);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest)).map((x) => x.toString(16).padStart(2, '0')).join('');
+  } catch {
+    let h = 2166136261;
+    for (const ch of String(input)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    return String(h >>> 0).padStart(32, '0');
+  }
+}
+function bridgePlayedAt(track) {
+  const raw = String(track?.raw || '');
+  const m = raw.match(/^(\\d{1,2}):(\\d{2})\\s*:/);
+  const now = new Date();
+  if (!m) return Date.now();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(m[1]), Number(m[2]), 0, 0);
+  if (d.getTime() > Date.now() + 2 * 3600000) d.setDate(d.getDate() - 1);
+  return d.getTime();
+}
+
 
 function ping() {
   try {
@@ -31,6 +52,46 @@ export default function Studio() {
   const [saved, setSaved] = useState('Saved'); const djRef = useRef(null); const timer = useRef(null); djRef.current = dj;
   useEffect(() => { document.title = 'Studio · DJ Request Live'; }, []);
   useEffect(() => { api.me().then(({ user }) => setDj(user), (e) => { if (e.status === 401) nav('/login', { replace: true }); else setFail(true); }); }, [nav]);
+  useEffect(() => {
+    let alive = true;
+    let timerId = null;
+    const lastSignature = { value: (() => { try { return localStorage.getItem('djrl_si_last_bridge_play') || ''; } catch { return ''; } })() };
+
+    const pollAndLearn = async () => {
+      try {
+        const r = await fetch('http://127.0.0.1:8765/now-playing', { cache: 'no-store' });
+        if (!r.ok) return;
+        const bridge = await r.json();
+        const track = bridge?.nowPlaying;
+        if (!bridge?.connected || !track?.artist || !track?.title) return;
+
+        const signature = [bridge.source || 'bridge', track.raw || '', track.artist, track.title].join('|');
+        if (signature === lastSignature.value) return;
+
+        const eventKey = await siDjEventKey(signature + '|' + String(Date.now()));
+        const playedAt = bridgePlayedAt(track);
+        await api.siDjRecordPlay({
+          event_key: eventKey,
+          played_at: playedAt,
+          artist: track.artist,
+          title: track.title,
+          source: bridge.source || 'bridge',
+          raw: track.raw || ''
+        });
+
+        if (!alive) return;
+        lastSignature.value = signature;
+        try { localStorage.setItem('djrl_si_last_bridge_play', signature); } catch { /* ignore */ }
+      } catch {
+        // Bridge or learning API can be offline without interrupting the Studio.
+      }
+    };
+
+    pollAndLearn();
+    timerId = setInterval(pollAndLearn, 2000);
+    return () => { alive = false; if (timerId) clearInterval(timerId); };
+  }, []);
+
   const saveNow = useCallback(async () => {
     clearTimeout(timer.current); const d = djRef.current; if (!d) return; if (!String(d.name || '').trim()) { setSaved('Name needed'); return; }
     try { await api.saveMe({ name: d.name, tagline: d.tagline || '', genres: d.genres || '', min_tip: +d.min_tip || 0, pay: d.pay, design: d.design, is_live: d.is_live }); setSaved('Saved'); }
