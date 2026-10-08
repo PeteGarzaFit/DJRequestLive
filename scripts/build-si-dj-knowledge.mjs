@@ -5,6 +5,7 @@ const BILLBOARD_URL = 'https://raw.githubusercontent.com/mhollingshead/billboard
 const T3R_URL = 'https://www.texasregionalradio.com/Top100.asp';
 const TIRC_URL = 'https://tirc.online/charts/tirc';
 const OUT = path.resolve('data/si-dj-knowledge.json');
+const AUDIO_URL = 'https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-09-14/audio_features.csv';
 
 const norm = (v) => String(v || '').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
 const key = (artist,title) => norm(artist)+'\\u0000'+norm(title);
@@ -17,6 +18,26 @@ function parseTables(html){
 function era(year){
   const y=Number(year||0);
   if(y>=2020)return '2020s'; if(y>=2010)return '2010s'; if(y>=2000)return '2000s'; if(y>=1990)return '90s'; if(y>=1980)return '80s'; if(y>=1970)return '70s'; return 'CLASSICS';
+}
+
+function parseCsv(text){
+  const rows=[]; let row=[], field='', quoted=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(quoted){
+      if(ch==='"' && text[i+1]==='"'){field+='"';i++;continue;}
+      if(ch==='"'){quoted=false;continue;}
+      field+=ch;
+    }else{
+      if(ch==='"'){quoted=true;continue;}
+      if(ch===','){row.push(field);field='';continue;}
+      if(ch==='\\n'){row.push(field);rows.push(row);row=[];field='';continue;}
+      if(ch==='\\r') continue;
+      field+=ch;
+    }
+  }
+  if(field.length || row.length){row.push(field);rows.push(row);}
+  return rows;
 }
 
 async function get(url){
@@ -73,6 +94,34 @@ async function addTexas(url, source){
   }catch(e){ console.warn('Texas source unavailable:',source,e.message); }
 }
 
+console.log('SI DJ knowledge: enriching with Billboard/Spotify audio features…');
+try{
+  const csv=await get(AUDIO_URL);
+  const rows=parseCsv(csv);
+  const header=rows.shift();
+  const idx=Object.fromEntries(header.map((h,i)=>[h,i]));
+  let enriched=0;
+  for(const r of rows){
+    const artist=r[idx.performer], title=r[idx.song];
+    const s=map.get(key(artist,title));
+    if(!s) continue;
+    const n=(name)=>Number(r[idx[name]]);
+    s.bpm=Number.isFinite(n('tempo')) ? n('tempo') : 0;
+    s.key=Number.isFinite(n('key')) ? n('key') : null;
+    s.mode=Number.isFinite(n('mode')) ? n('mode') : null;
+    s.danceability=Number.isFinite(n('danceability')) ? n('danceability') : null;
+    s.audio_energy=Number.isFinite(n('energy')) ? n('energy') : null;
+    s.valence=Number.isFinite(n('valence')) ? n('valence') : null;
+    s.explicit=String(r[idx.spotify_track_explicit]||'').toLowerCase()==='true';
+    s.audio_popularity=Number.isFinite(n('spotify_track_popularity')) ? n('spotify_track_popularity') : 0;
+    s.audio_genre=r[idx.spotify_genre] || '';
+    s.audio_album=r[idx.spotify_track_album] || '';
+    s.duration_ms=Number.isFinite(n('spotify_track_duration_ms')) ? n('spotify_track_duration_ms') : 0;
+    if(s.audio_genre) enriched++;
+  }
+  console.log('audio feature matches:',enriched);
+}catch(e){ console.warn('Audio feature source unavailable:',e.message); }
+
 console.log('SI DJ knowledge: refreshing Texas regional + internet-radio signals…');
 await addTexas(T3R_URL,'t3r');
 await addTexas(TIRC_URL,'tirc');
@@ -94,7 +143,8 @@ const artistGenre = new Map([
 for(const s of map.values()){
   const a=norm(s.artist);
   const texas=s.texas_score>0;
-  s.genre=artistGenre.get(a) || (texas ? 'Texas Country' : (/dance|edm|house|club/.test(norm(s.title))?'Dance / EDM':'Pop'));
+  const audioGenre=norm(s.audio_genre||'');
+  s.genre=artistGenre.get(a) || (texas ? 'Texas Country' : audioGenre.includes('country') ? 'Country' : audioGenre.includes('hip hop') || audioGenre.includes('rap') ? 'Hip-Hop' : audioGenre.includes('r&b') ? 'R&B' : audioGenre.includes('rock') ? 'Rock' : audioGenre.includes('edm') || audioGenre.includes('electronic') ? 'Dance / EDM' : (/dance|edm|house|club/.test(norm(s.title))?'Dance / EDM':'Pop'));
   s.era=era(s.first_year || s.last_year);
   const tags=new Set();
   const g=String(s.genre).toLowerCase();
@@ -111,7 +161,11 @@ for(const s of map.values()){
   if(s.tirc_rank>0) tags.add('texasinternet');
   if((s.last_year||0)>=new Date().getFullYear()-2) tags.add('current');
   s.tags=[...tags].join(',');
-  s.popularity=Math.round((s.popularity + s.texas_score)*100)/100;
+  s.energy = Number.isFinite(Number(s.audio_energy)) ? Math.round(Number(s.audio_energy)*10) : (s.genre==='Dance / EDM'?9:7);
+  s.dancefloor = Number.isFinite(Number(s.danceability)) ? Math.round(Number(s.danceability)*10) : (s.genre==='Dance / EDM'?10:7);
+  s.singalong = Math.max(1, Math.min(10, Math.round((Number(s.valence)||0.6)*8 + (s.billboard_peak<=20?2:0))));
+  s.crossgen = s.billboard_peak<=10 ? 9 : s.billboard_weeks>=20 ? 8 : 6;
+  s.popularity=Math.round((s.popularity + s.texas_score + (Number(s.audio_popularity)||0)*0.5)*100)/100;
   s.billboard_score=Math.round(s.billboard_score*100)/100;
   s.texas_score=Math.round(s.texas_score*100)/100;
 }
@@ -126,6 +180,7 @@ await fs.writeFile(OUT,JSON.stringify({
   generated_at:new Date().toISOString(),
   sources:{
     billboard_hot_100:{url:BILLBOARD_URL,coverage:'1958-present',kind:'historical_chart_signal'},
+    billboard_spotify_audio_features:{url:AUDIO_URL,coverage:'through 2021',kind:'audio_features_and_genre'},
     texas_regional_radio_report:{url:T3R_URL,coverage:'current_public_chart',kind:'texas_radio_signal'},
     texas_internet_radio_chart:{url:TIRC_URL,coverage:'current_public_chart',kind:'texas_internet_radio_signal'}
   },
