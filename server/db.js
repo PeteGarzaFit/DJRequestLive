@@ -10,6 +10,14 @@ export async function createDb() {
     const d = new DatabaseSync(process.env.SQLITE_FILE || ':memory:');
     d.exec('PRAGMA foreign_keys = ON');
     d.exec(readFileSync(new URL('./schema.sqlite.sql', import.meta.url), 'utf8'));
+    const contextColumns = new Set(d.prepare('PRAGMA table_info(si_dj_learning_context)').all().map((r) => r.name));
+    for (const [name, type] of [
+      ['planned_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['request_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['event_count', 'INTEGER NOT NULL DEFAULT 0'],
+    ]) {
+      if (!contextColumns.has(name)) d.exec('ALTER TABLE si_dj_learning_context ADD COLUMN ' + name + ' ' + type);
+    }
     return {
       driver: 'sqlite',
       async all(sql, p = []) { return d.prepare(sql).all(...p).map((r) => ({ ...r })); },
