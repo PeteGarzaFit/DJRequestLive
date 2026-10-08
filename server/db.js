@@ -21,10 +21,9 @@ export async function createDb() {
 
   const mysql = await import('mysql2/promise');
   const configuredHost = String(process.env.DB_HOST || '').trim().toLowerCase();
-  // Hostinger's Node runtime can route localhost to a different MySQL host grant.
-  // Use the database server hostname for Hostinger deployments when DB_HOST is left at localhost.
+  // Hostinger's Node runtime may resolve localhost to IPv6. Use IPv4 for the local MySQL service.
   const dbHost = (!configuredHost || configuredHost === 'localhost' || configuredHost === '::1' || configuredHost === '127.0.0.1')
-    ? 'srv1458.hstgr.io'
+    ? '127.0.0.1'
     : configuredHost;
 
   const pool = mysql.createPool({
