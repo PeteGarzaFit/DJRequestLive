@@ -15,9 +15,61 @@ const VIBES = [
   ['KEEP VIBE','#64748b'],['RAISE ENERGY','#ef4444'],['DANCE','#f59e0b'],['PARTY','#ec4899'],
   ['SINGALONG','#22c55e'],['CHILL','#38bdf8'],['PEAK TIME','#a855f7'],['WILD CARD','#14b8a6']
 ];
-const ERAS = ['CURRENT','2020s','2010s','2000s','90s','80s','70s','CLASSICS'];
+const ERAS = ['ALL','CURRENT','2020s','2010s','2000s','90s','80s','70s','CLASSICS'];
+
+function normalizeText(value){
+  return String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+
+function normalizeArtist(value){
+  return normalizeText(value).replace(/\\b(the|band|and the|the departed)\\b/g,' ').replace(/\\s+/g,' ').trim();
+}
 
 function haystack(s){ return [s.genre,s.tags,s.era,s.title,s.artist].join(' ').toLowerCase(); }
+
+function artistMatches(artist, query){
+  const a = normalizeArtist(artist);
+  const q = normalizeArtist(query);
+  if(!q) return false;
+  if(a === q || a.startsWith(q+' ')) return true;
+  const artistWords = a.split(' ').filter(Boolean);
+  const queryWords = q.split(' ').filter(Boolean);
+  return queryWords.length > 0 && queryWords.every(word => artistWords.includes(word));
+}
+
+function genreMatches(s, selected){
+  const g = normalizeText(s.genre);
+  const tags = normalizeText(s.tags);
+  const wanted = normalizeText(selected);
+  if(!wanted) return true;
+  if(wanted === 'texas country') return g.includes('texas country') || tags.includes('texascountry');
+  if(wanted === 'red dirt') return g.includes('red dirt') || tags.includes('red dirt');
+  if(wanted === 'hip hop') return g.includes('hip hop') || tags.includes('hiphop');
+  if(wanted === 'r b') return g.includes('r b') || tags.includes('rnb');
+  if(wanted === 'dance edm') return g.includes('dance') || g.includes('edm') || tags.includes('dance');
+  if(wanted === 'disco funk') return g.includes('disco') || g.includes('funk') || tags.includes('disco') || tags.includes('funk');
+  if(wanted === 'regional mexican') return g.includes('regional mexican') || tags.includes('regionalmexican');
+  if(wanted === 'norteno') return g.includes('norteno') || tags.includes('norteno');
+  if(wanted === 'latin') return g.includes('latin') || tags.includes('latin');
+  return g.includes(wanted) || tags.includes(wanted);
+}
+
+function eraMatches(s, selected){
+  if(!selected || selected === 'ALL') return true;
+  if(selected === 'CURRENT') return String(s.tags || '').toLowerCase().split(',').map(x=>x.trim()).includes('current');
+  return s.era === selected;
+}
+
+function songKey(s){
+  return normalizeText(s.title)+'|'+normalizeText(s.artist);
+}
+
+function diversityScore(s, nonce){
+  const input = songKey(s)+'|'+String(nonce);
+  let hash = 0;
+  for(let i=0;i<input.length;i++) hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
+  return Math.abs(hash % 1000);
+}
 
 function scoreSong(s, filters, now){
   let score = Number(s.energy || 0) + Number(s.dancefloor || 0) + Number(s.singalong || 0) + Number(s.crossgen || 0);
@@ -44,7 +96,9 @@ export default function Intelligence(){
   const [bridge,setBridge]=useState({connected:false,source:null,nowPlaying:null,error:'Checking SI DJ Bridge…'});
   const [genre,setGenre]=useState('Country');
   const [vibe,setVibe]=useState('KEEP VIBE');
-  const [era,setEra]=useState('CURRENT');
+  const [era,setEra]=useState('ALL');
+  const [visibleCount,setVisibleCount]=useState(10);
+  const [refreshNonce,setRefreshNonce]=useState(0);
   const [query,setQuery]=useState('');
   const [ai,setAi]=useState([]);
   const [aiBusy,setAiBusy]=useState(false);
@@ -61,45 +115,51 @@ export default function Intelligence(){
   useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2000); return()=>clearInterval(t); },[loadBridge]);
 
   const filters={genre,vibe,era};
+  const artistFilter = useMemo(()=>{
+    const q = query.trim();
+    if(!q) return '';
+    const artists = [...new Set(songRows().map(s=>s.artist))];
+    return artists.find(name=>artistMatches(name,q)) || '';
+  },[query]);
+
   const local=useMemo(()=>{
     let rows=songRows();
-    const selected = String(genre || '').toLowerCase();
-    if (selected) {
-      rows = rows.filter(s => {
-        const g = String(s.genre || '').toLowerCase();
-        const tags = String(s.tags || '').toLowerCase();
-        if (selected === 'texas country') return g.includes('texas country') || tags.includes('texascountry');
-        if (selected === 'red dirt') return g.includes('red dirt') || tags.includes('red dirt');
-        if (selected === 'hip-hop') return g.includes('hip-hop') || tags.includes('hiphop');
-        if (selected === 'r&b') return g.includes('r&b') || tags.includes('rnb');
-        if (selected === 'dance / edm') return g.includes('dance') || g.includes('edm') || tags.includes('dance');
-        if (selected === 'disco / funk') return g.includes('disco') || g.includes('funk') || tags.includes('disco') || tags.includes('funk');
-        if (selected === 'regional mexican') return g.includes('regional mexican') || tags.includes('regionalmexican');
-        if (selected === 'norteño') return g.includes('norteño') || g.includes('norteno') || tags.includes('norteño') || tags.includes('norteno');
-        return g.includes(selected) || tags.includes(selected);
-      });
+    if(artistFilter){
+      rows=rows.filter(s=>normalizeArtist(s.artist)===normalizeArtist(artistFilter));
+    }else if(query.trim()){
+      const q=normalizeText(query);
+      rows=rows.filter(s=>normalizeText(haystack(s)).includes(q));
     }
-    if(query.trim()){
-      const q=query.toLowerCase();
-      rows=rows.filter(s=>haystack(s).includes(q));
-    }
+    rows=rows.filter(s=>genreMatches(s,genre) && eraMatches(s,era));
     return rows.map(s=>({...s,_score:scoreSong(s,filters,bridge.nowPlaying)}))
-      .sort((a,b)=>b._score-a._score).slice(0,18);
-  },[query,genre,vibe,era,bridge.nowPlaying]);
+      .sort((a,b)=>b._score-a._score || diversityScore(a,refreshNonce)-diversityScore(b,refreshNonce));
+  },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce]);
+
+  useEffect(()=>{
+    setVisibleCount(10);
+    setAi([]);
+  },[query,artistFilter,genre,vibe,era]);
 
   const askAI=useCallback(async()=>{
     setAiBusy(true);
     try{
       const now=bridge.nowPlaying;
-      const candidates=local.slice(0,12).map(s=>({title:s.title,artist:s.artist,genre:s.genre,era:s.era,bpm:s.bpm,tags:s.tags}));
+      const candidates=local.slice(0,40).map(s=>({title:s.title,artist:s.artist,genre:s.genre,era:s.era,bpm:s.bpm,tags:s.tags}));
+      const hardFilter = [
+        artistFilter ? 'ARTIST HARD FILTER: '+artistFilter : '',
+        genre ? 'GENRE HARD FILTER: '+genre : '',
+        era && era !== 'ALL' ? 'ERA HARD FILTER: '+era : '',
+        query.trim() ? 'SEARCH: '+query.trim() : ''
+      ].filter(Boolean).join(' | ');
       const prompt=[
         'SUPER INTELLIGENCE DJ TRACK FINDER.',
         'The DJ is choosing the NEXT track, not planning an event.',
         'Current track:', now ? JSON.stringify(now) : 'No current track available.',
         'DJ controls:', JSON.stringify(filters),
+        hardFilter ? 'NON-NEGOTIABLE FILTERS: '+hardFilter : 'NON-NEGOTIABLE FILTERS: none',
         'Candidate library:', JSON.stringify(candidates),
         'Return JSON with recommendations: [{title,artist,reason,move}] and no more than 8 recommendations.',
-        'Rank the best practical next-track choices first. Favor smooth BPM/genre/energy transitions. Do not invent tracks; use only candidates.'
+        'Rank the best practical next-track choices first. Favor smooth BPM/genre/energy transitions. Do not invent tracks; use only candidates. Never violate a hard artist, genre, era, or search filter.'
       ].join('\n');
       const {plan}=await api.aiEventPlan(prompt);
       const recs=(plan?.recommendations||[]).flatMap(g=>g.songs||[]).slice(0,8);
@@ -107,9 +167,27 @@ export default function Intelligence(){
       if(!recs.length) toast('SI DJ did not return recommendations. The local ranked library is still ready.');
     }catch(e){ toast(errorText(e)); }
     finally{setAiBusy(false);}
-  },[bridge.nowPlaying,filters,local]);
+  },[bridge.nowPlaying,filters,local,artistFilter,query]);
 
-  const display = ai.length ? ai : local.slice(0,10);
+  const aiMap = useMemo(()=>{
+    const map = new Map();
+    ai.forEach(s=>map.set(songKey(s),s));
+    return map;
+  },[ai]);
+
+  const displayPool = useMemo(()=>{
+    if(!ai.length) return local;
+    const aiFirst = [];
+    const rest = [];
+    local.forEach(s=>{
+      const key=songKey(s);
+      if(aiMap.has(key)) aiFirst.push({...s,...aiMap.get(key)});
+      else rest.push(s);
+    });
+    return [...aiFirst,...rest];
+  },[ai,aiMap,local]);
+
+  const display = displayPool.slice(0,visibleCount);
   return <div className="rl rl-app"><div className="wrap wide">
     <div className="shead" style={{marginBottom:12}}>
       <Link to="/studio" className="brand" style={{textDecoration:'none',color:'inherit'}}><Mark size={28} badge/>DJ Request Live</Link>
@@ -146,8 +224,8 @@ export default function Intelligence(){
 
       <main>
         <section className="panel">
-          <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>Your next-track shortlist</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · ranked against the current track</p></div><span className="ai-pill">{ai.length?'AI RANKED':'LIBRARY RANKED'}</span></div>
-          <div className="field" style={{marginTop:14}}><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search this narrowed list by song or artist…" /></div>
+          <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>Your next-track shortlist</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · ranked against the current track</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{ai.length?'AI RANKED':'LIBRARY RANKED'}</span><button className="btn btn-ghost btn-sm" onClick={()=>{setAi([]);setVisibleCount(10);setRefreshNonce(n=>n+1)}}>REFRESH LIST ↻</button></div></div>
+          <div className="field" style={{marginTop:14}}><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search artist or song…" /></div>
           <div style={{display:'grid',gap:9,marginTop:12}}>
             {display.map((s,i)=><article key={(s.title||'')+'|'+(s.artist||'')+'|'+i} style={{display:'grid',gridTemplateColumns:'44px minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'13px 14px',border:'1px solid rgba(255,255,255,.09)',borderRadius:12,background:'rgba(255,255,255,.025)'}}>
               <strong style={{fontSize:18,opacity:.65}}>{String(i+1).padStart(2,'0')}</strong>
@@ -155,7 +233,9 @@ export default function Intelligence(){
               <div style={{textAlign:'right'}}><b>{s.bpm ? s.bpm+' BPM' : ''}</b>{s.move && <small style={{display:'block'}}>{s.move}</small>}<button className="btn btn-ghost btn-sm" style={{marginTop:5}} onClick={()=>navigator.clipboard?.writeText((s.title||'')+' — '+(s.artist||''))}>Copy</button></div>
             </article>)}
           </div>
-          {!display.length && <p className="hint">No matches. Change one pad and SI DJ will widen the shortlist.</p>}
+          {!display.length && <p className="hint">{artistFilter ? 'No '+artistFilter+' tracks match the current hard filters. Remove an era or genre control to widen the search.' : 'No matches. Change one hard filter or search term to widen the shortlist.'}</p>}
+          {display.length < displayPool.length && <button className="btn btn-ghost btn-block" style={{marginTop:12}} onClick={()=>setVisibleCount(n=>Math.min(n+10,displayPool.length))}>MORE TRACKS →</button>}
+          {display.length >= displayPool.length && displayPool.length > 0 && <p className="hint" style={{marginTop:10}}>Showing all {displayPool.length} matching tracks — no unrelated songs added.</p>}
         </section>
         <section className="panel" style={{marginTop:18}}>
           <div className="eyebrow">WHY THIS WORKS</div>
