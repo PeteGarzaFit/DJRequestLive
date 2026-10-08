@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword, fakeVerify, newToken, tokenHash, parseCoo
 import OpenAI from 'openai';
 import { AI_PLAN_SYSTEM } from '../lib/aiPlanner.js';
 import { songRows } from '../lib/songLibrary.js';
+import { fetchMusicIntelligence, MUSIC_LANES, MUSIC_SUBGENRES } from '../lib/musicIntelligence.js';
 
 const RESERVED = ['studio', 'login', 'signup', 'dashboard', 'api', 'admin', 'assets', 'media', 'privacy', 'terms', 'help', 'index', 'app', 'www'];
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{2,29}$/;
@@ -157,6 +158,43 @@ export function createApp(db) {
       if (method !== 'GET' && method !== 'HEAD' && !sameOrigin(req)) throw bad('bad_origin', 403);
       const ip = clientIp(req);
       let m;
+
+      if (path === '/api/ai/music-intelligence' && method === 'GET') {
+        const u = await requireUser(req);
+        if (limited(`music-intel:${u.id}`, 3, 86400000)) {
+          return send(res, 200, { available: false, cached: true, lanes: MUSIC_LANES.map(({ key, label }) => ({ key, label, status: 'cached-limit', items: [] })), subgenres: MUSIC_SUBGENRES }), true;
+        }
+        if (!process.env.OPENAI_API_KEY) {
+          return send(res, 200, { available: false, reason: 'ai_not_configured', lanes: MUSIC_LANES.map(({ key, label }) => ({ key, label, status: 'unavailable', items: [] })), subgenres: MUSIC_SUBGENRES }), true;
+        }
+        const day = new Date().toISOString().slice(0, 10);
+        if (!globalThis.__sidjMusicIntel) globalThis.__sidjMusicIntel = { day: null, data: null, promise: null };
+        const cache = globalThis.__sidjMusicIntel;
+        if (cache.day === day && cache.data) {
+          return send(res, 200, { available: true, cached: true, ...cache.data, subgenres: MUSIC_SUBGENRES }), true;
+        }
+        if (!cache.promise) {
+          cache.promise = (async () => {
+            const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+            const data = await fetchMusicIntelligence(client);
+            cache.day = day;
+            cache.data = data;
+            return data;
+          })().finally(() => { cache.promise = null; });
+        }
+        try {
+          const data = await cache.promise;
+          return send(res, 200, { available: true, cached: false, ...data, subgenres: MUSIC_SUBGENRES }), true;
+        } catch (e) {
+          console.error('SI DJ music intelligence refresh failed:', { message: e?.message, code: e?.code });
+          return send(res, 200, {
+            available: false,
+            reason: 'music_intelligence_unavailable',
+            lanes: MUSIC_LANES.map(({ key, label }) => ({ key, label, status: 'unavailable', items: [] })),
+            subgenres: MUSIC_SUBGENRES
+          }), true;
+        }
+      }
 
       if (path === '/api/ai/event-plan' && method === 'POST') {
         const u = await requireUser(req);
