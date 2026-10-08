@@ -5,9 +5,14 @@ const fs = require('fs');
 const os = require('os');
 
 let win, tray, bridge;
+const PROTOCOL = 'sidj-bridge';
 const PORT = 8765;
 const configDir = path.join(app.getPath('userData'));
 const configPath = path.join(configDir, 'config.json');
+
+function registerProtocol() {
+  try { app.setAsDefaultProtocolClient(PROTOCOL); } catch (e) { console.error('[Protocol registration]', e); }
+}
 
 function defaultConfig() {
   return {
@@ -155,10 +160,24 @@ ipcMain.handle('bridge:open-config', () => {
 });
 
 app.whenReady().then(() => {
+  registerProtocol();
   ensureConfig();
   startBridge();
   createWindow();
   createTray();
+});
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  if (url.startsWith(PROTOCOL + '://')) {
+    if (win) { win.show(); win.focus(); }
+    startBridge();
+  }
+});
+
+app.on('second-instance', (_event, commandLine) => {
+  if (win) { win.show(); win.focus(); }
+  if (commandLine.some((arg) => arg.startsWith(PROTOCOL + '://'))) startBridge();
 });
 
 app.on('before-quit', () => {
