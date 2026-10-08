@@ -28,7 +28,7 @@ jobs:
         run: |
           git config user.name "SI DJ Knowledge Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/si-dj-knowledge.json
+          git add data/si-dj-knowledge/ && git add data/si-dj-knowledge.json 2>/dev/null || true
           git diff --cached --quiet && exit 0
           git commit -m "chore: refresh SI DJ global music knowledge"
           git push
