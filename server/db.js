@@ -21,7 +21,7 @@ export async function createDb() {
 
   const mysql = await import('mysql2/promise');
   const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
+    // Hostinger can resolve localhost to IPv6 (::1), while the MySQL user may be granted for IPv4 localhost.\n    // Normalize localhost to 127.0.0.1 so the production app uses the same MySQL account/host grant.\n    host: process.env.DB_HOST === 'localhost' ? '127.0.0.1' : (process.env.DB_HOST || '127.0.0.1'),
     port: Number(process.env.DB_PORT || 3306),
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
