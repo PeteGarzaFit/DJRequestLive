@@ -89,6 +89,8 @@ function scoreSong(s, filters, now){
     score += Math.max(0, 18 - diff);
     if (diff <= 8) score += 12;
   }
+  if (s.knowledge_match) score += Math.min(20, Number(s.popularity || 0) / 100);
+  if (s.texas_score) score += Math.min(18, Number(s.texas_score || 0) / 25);
   if (now?.title && s.title.toLowerCase() === String(now.title).toLowerCase()) score -= 100;
   return score;
 }
@@ -176,7 +178,10 @@ export default function Intelligence(){
   const local=useMemo(()=>{
     if(libraryBusy) return [];
     const hasPrivateLibrary = Number(librarySummary?.tracks || 0) > 0;
-    let rows = hasPrivateLibrary ? libraryTracks : (knowledgeTracks.length ? knowledgeTracks : songRows());
+    const knowledgeIndex = new Map(knowledgeTracks.map(s => [songKey(s), s]));
+    let rows = hasPrivateLibrary
+      ? libraryTracks.map(s => knowledgeIndex.has(songKey(s)) ? {...knowledgeIndex.get(songKey(s)), ...s, knowledge_match:true, genre:s.genre || knowledgeIndex.get(songKey(s)).genre} : s)
+      : (knowledgeTracks.length ? knowledgeTracks : songRows());
     if(artistFilter){
       rows=rows.filter(s=>normalizeArtist(s.artist)===normalizeArtist(artistFilter));
     }else if(query.trim()){
