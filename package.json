@@ -17,7 +17,8 @@
     "bridge:app": "electron bridge-app/main.cjs",
     "bridge:package": "electron-builder --mac",
     "bridge:check": "node --check bridge/server.mjs && node --check bridge-app/main.cjs && node --check bridge-app/preload.cjs",
-    "inventory:import": "node scripts/import-master-inventory.mjs"
+    "inventory:import": "node scripts/import-master-inventory.mjs",
+    "si-dj:build": "node scripts/build-si-dj-knowledge.mjs"
   },
   "dependencies": {
     "mysql2": "^3.11.3",
