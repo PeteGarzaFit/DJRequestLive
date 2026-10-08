@@ -8,8 +8,9 @@ import { toast } from '../lib/toast.js';
 import GuestView from '../components/GuestView.jsx';
 import { Mark } from '../components/Logo.jsx';
 import Planner from './Planner.jsx';
+import Intelligence from './Intelligence.jsx';
 
-const TABS = [['queue', 'SI DJ'], ['planner', 'AI Planner'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
+const TABS = [['intelligence', 'SUPER INTELLIGENCE'], ['queue', 'SI QUE'], ['planner', 'AI Planner'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
 const FILTERS = [['new', 'New'], ['approved', 'Approved'], ['played', 'Played'], ['declined', 'Declined']];
 const ORIGIN = () => window.location.origin;
 
@@ -48,7 +49,7 @@ export default function Studio() {
         <div className="shead-r"><button className={"outdoor-toggle" + (outdoorMode ? " active" : "")} onClick={toggleOutdoor} aria-pressed={outdoorMode} title="High-contrast mode for bright outdoor sunlight">{outdoorMode ? "☀ Outdoor" : "☾ Dark"}</button><label className="golive" htmlFor="golive"><input type="checkbox" id="golive" checked={!!dj.is_live} onChange={(e) => { edit({ is_live: e.target.checked }); setTimeout(saveNow, 0); }} />{dj.is_live ? 'Taking requests' : 'Paused'}</label><button className="mini" onClick={logout}>Log out</button></div>
       </div>
       <div className="tabs" role="tablist">{TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => goTab(k)}>{l}</button>)}</div>
-      {tab === 'queue' && <QueueTab goTab={goTab} />}{tab === 'planner' && <Planner />}{tab === 'page' && <PageTab dj={dj} edit={edit} saved={saved} goTab={goTab} />}{tab === 'design' && <DesignTab dj={dj} edit={edit} saved={saved} mergeMedia={mergeMedia} goTab={goTab} />}{tab === 'share' && <ShareTab dj={dj} />}
+      {tab === 'intelligence' && <Intelligence />}{tab === 'queue' && <QueueTab goTab={goTab} />}{tab === 'planner' && <Planner />}{tab === 'page' && <PageTab dj={dj} edit={edit} saved={saved} goTab={goTab} />}{tab === 'design' && <DesignTab dj={dj} edit={edit} saved={saved} mergeMedia={mergeMedia} goTab={goTab} />}{tab === 'share' && <ShareTab dj={dj} />}
     </div></div>
   );
 }
