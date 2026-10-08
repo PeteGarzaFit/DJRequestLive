@@ -45,6 +45,24 @@ function parseTrackLine(line) {
   };
 }
 
+function readHistory(file) {
+  try {
+    const text = fs.readFileSync(file, 'utf8');
+    const lines = text.split(/\r?\n/);
+    const entries = [];
+    let date = null;
+    for (const line of lines) {
+      const header = line.trim().match(/^VirtualDJ History - (\d{4}\/\d{2}\/\d{2})$/i);
+      if (header) { date = header[1]; continue; }
+      const raw = line.trim();
+      const m = raw.match(/^(\d{1,2}:\d{2})\s*:\s*(.+?)\s+-\s+(.+)$/);
+      if (!m) continue;
+      entries.push({ time:m[1], artist:m[2].trim(), title:m[3].trim(), raw, date });
+    }
+    return entries;
+  } catch { return []; }
+}
+
 function readLastLine(file) {
   try {
     const stat = fs.statSync(file);
