@@ -237,3 +237,21 @@
 .rl.rl-app .sidj-setup{margin-bottom:10px;padding:12px;border:1px solid rgba(23,105,232,.28);border-radius:14px;background:rgba(23,105,232,.035)}.rl.rl-app .sidj-setup-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.rl.rl-app .sidj-setup h3{margin:2px 0 3px;font-size:14px}.rl.rl-app .sidj-setup p{margin:0;color:var(--muted);font-size:10px;line-height:1.45}.rl.rl-app .sidj-status{font-family:var(--mono);font-size:9px;font-weight:800;color:#8b95a3;white-space:nowrap}.rl.rl-app .sidj-status.connected{color:#21c77a}.rl.rl-app .sidj-setup-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.rl.rl-app .sidj-setup-card{display:grid;gap:5px;padding:9px;border:1px solid rgba(23,105,232,.15);border-radius:10px;background:rgba(255,255,255,.025)}.rl.rl-app .sidj-setup-card b{font-family:var(--mono);font-size:9px;color:#8fbcff}.rl.rl-app .sidj-setup-card span{font-size:10px;color:var(--muted);line-height:1.4}.rl.rl-app .sidj-downloads,.rl.rl-app .sidj-software{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}.rl.rl-app .sidj-software span{padding:4px 6px;border:1px solid rgba(23,105,232,.2);border-radius:999px}.rl.rl-app.outdoor-mode .sidj-setup{background:#fff;border-color:#9db9d8}.rl.rl-app.outdoor-mode .sidj-setup-card{background:#f3f7fb;border-color:#c7d2df}.rl.rl-app.outdoor-mode .sidj-setup-card b{color:#1257d6}@media(max-width:760px){.rl.rl-app .sidj-setup-grid{grid-template-columns:1fr}.rl.rl-app .sidj-setup-head{display:grid}}
 
 html,body,#root{max-width:100%;overflow-x:hidden}body{overscroll-behavior-x:none}.rl{max-width:100vw;overflow-x:hidden}.rl *{min-width:0}@media(max-width:760px){.rl{width:100%;overflow-x:hidden}.rl .panel,.rl .card,.rl .sidj-command,.rl .sidj-setup{max-width:100%;overflow-x:hidden}.rl img,.rl canvas,.rl svg{max-width:100%}}
+/* Studio day mode: keep the main SI DJ command center in the same light theme. */
+.rl.rl-app.outdoor-mode .sidj-command{
+  background:linear-gradient(180deg,#ffffff,#f7faff);
+  border-color:#9db9d8;
+  box-shadow:0 3px 14px rgba(16,23,34,.08);
+  color:#101722;
+}
+.rl.rl-app.outdoor-mode .sidj-command .sidj-livebar{
+  background:#f3f7fb!important;
+  border-color:#c7d2df!important;
+}
+.rl.rl-app.outdoor-mode .sidj-command .sidj-section{
+  color:#101722;
+}
+.rl.rl-app.outdoor-mode .sidj-command .sidj-row{border-top-color:#d8e0e8}
+.rl.rl-app.outdoor-mode .sidj-command .sidj-row strong{color:#101722}
+.rl.rl-app.outdoor-mode .sidj-command .sidj-row>b{color:#1257d6}
+.rl.rl-app.outdoor-mode .sidj-command .sidj-card{background:#f3f7fb;border-color:#c7d2df}
