@@ -91,6 +91,8 @@ function scoreSong(s, filters, now){
   }
   if (s.knowledge_match) score += Math.min(20, Number(s.popularity || 0) / 100);
   if (s.texas_score) score += Math.min(18, Number(s.texas_score || 0) / 25);
+  if (s.live_learning_score) score += Math.min(20, Number(s.live_learning_score || 0));
+  if (s.live_transition_score) score += Math.min(30, Number(s.live_transition_score || 0));
   if (now?.title && s.title.toLowerCase() === String(now.title).toLowerCase()) score -= 100;
   return score;
 }
