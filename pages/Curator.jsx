@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { songRows } from '../lib/songLibrary.js';
 import { Mark } from '../components/Logo.jsx';
@@ -42,6 +42,30 @@ export default function Curator(){
   const [bridalParty,setBridalParty]=useState('');
   const [timeline,setTimeline]=useState('');
   const [spotifyUrl,setSpotifyUrl]=useState('');
+  const [timelineTimes,setTimelineTimes]=useState({});
+
+  useEffect(()=>{
+    try{
+      const raw=localStorage.getItem('djrl_event_curator');
+      if(!raw) return;
+      const savedPlan=JSON.parse(raw);
+      if(!savedPlan || typeof savedPlan!=='object') return;
+      if(savedPlan.eventType) setEventType(savedPlan.eventType);
+      if(savedPlan.name!=null) setName(savedPlan.name);
+      if(savedPlan.details) setDetails(x=>({...x,...savedPlan.details}));
+      if(savedPlan.selections) setSelections(savedPlan.selections);
+      if(savedPlan.notes) setNotes(savedPlan.notes);
+      if(Array.isArray(savedPlan.guestIdeas)) setGuestIdeas(savedPlan.guestIdeas);
+      if(savedPlan.specialSongs) setSpecialSongs(x=>({...x,...savedPlan.specialSongs}));
+      if(savedPlan.styles) setStyles(savedPlan.styles);
+      if(savedPlan.artists!=null) setArtists(savedPlan.artists);
+      if(savedPlan.behavior) setBehavior(savedPlan.behavior);
+      if(savedPlan.bridalParty!=null) setBridalParty(savedPlan.bridalParty);
+      if(savedPlan.timeline!=null) setTimeline(savedPlan.timeline);
+      if(savedPlan.timelineTimes) setTimelineTimes(savedPlan.timelineTimes);
+      if(savedPlan.spotifyUrl!=null) setSpotifyUrl(savedPlan.spotifyUrl);
+    }catch{}
+  },[]);
 
   const moments=eventType==='Wedding'
     ? WEDDING_MOMENTS.flatMap(([group,...items])=>items.map(item=>({group,item})))
@@ -65,7 +89,7 @@ export default function Curator(){
   function removeSong(song){ setSelections(x=>({...x,[active]:(x[active]||[]).filter(s=>key(s)!==key(song))})); }
   function addIdea(){ const v=idea.trim(); if(!v)return; setGuestIdeas(x=>[...x,{text:v,section:active,from:'Family / Bridal Party'}]); setIdea(''); }
   function save(){
-    localStorage.setItem('djrl_event_curator',JSON.stringify({eventType,name,details,selections,notes,guestIdeas,specialSongs,styles,artists,behavior,bridalParty,timeline,spotifyUrl}));
+    localStorage.setItem('djrl_event_curator',JSON.stringify({eventType,name,details,selections,notes,guestIdeas,specialSongs,styles,artists,behavior,bridalParty,timeline,timelineTimes,spotifyUrl}));
     setSaved(true); setTimeout(()=>setSaved(false),1600);
   }
   function toggleStyle(s){ setStyles(x=>({...x,[s]:x[s]==='like'?'dislike':x[s]==='dislike'?undefined:'like'})); }
@@ -121,18 +145,27 @@ export default function Curator(){
           <input className="input" value={spotifyUrl} onChange={e=>setSpotifyUrl(e.target.value)} placeholder="Paste Spotify playlist link…" />
           {spotifyUrl && <p className="hint" style={{fontSize:11,marginBottom:0}}>Playlist linked to this event. Later, SI DJ can reconcile it against the available DJ files and flag anything missing.</p>}
         </div>
+        {eventType!=='Wedding' && <div className="panel" style={{marginTop:16,background:'rgba(255,255,255,.025)'}}>
+          <div className="eyebrow">EVENT TIMELINE</div>
+          <h3 style={{margin:'5px 0'}}>Give the DJ a simple run of show.</h3>
+          <p className="hint">Times are optional. When entered, DJ Event Mode can automatically identify the current and next moment.</p>
+          <div style={{display:'grid',gap:7,marginTop:10}}>{moments.map((m,i)=><div key={m.item} style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 105px',gap:8,alignItems:'center'}}><div style={{padding:'10px 11px',border:'1px solid rgba(255,255,255,.08)',borderRadius:9}}><small style={{opacity:.5,fontWeight:800}}>STEP {i+1}</small><strong style={{display:'block'}}>{m.item}</strong></div><input type="time" className="input" value={timelineTimes[m.item]||''} onChange={e=>setTimelineTimes(x=>({...x,[m.item]:e.target.value}))} /></div>)}</div>
+        </div>}
         <div className="field" style={{marginTop:16}}><label>Anything the DJ should know?</label><textarea className="input" rows="4" value={details.specialNotes} onChange={e=>setDetail('specialNotes',e.target.value)} placeholder="Accessibility, venue restrictions, family dynamics, cultural details, surprises, etc." /></div>
       </section>}
 
       {tab==='WEDDING FLOW' && eventType==='Wedding' && <section className="panel">
         <div className="eyebrow">WEDDING FLOW</div>
         <h2 style={{margin:'6px 0'}}>Plan the moments, not a spreadsheet.</h2>
-        <p className="hint">The planning form calls for an order of reception events while leaving exact timing flexible for the DJ.</p>
+        <p className="hint">Set optional start times for each moment. DJ Event Mode will use these times to show what is happening now, what is next, and what is still ahead.</p>
         <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(280px,420px)',gap:16,marginTop:16}}>
           <div style={{display:'grid',gap:7}}>
-            {moments.map((m,i)=><button key={m.item} onClick={()=>{setActive(m.item);setTab('MUSIC')}} style={{textAlign:'left',padding:13,borderRadius:10,border:active===m.item?'1px solid var(--accent)':'1px solid rgba(255,255,255,.08)',background:active===m.item?'rgba(255,255,255,.07)':'rgba(255,255,255,.02)',color:'var(--fg)',cursor:'pointer'}}>
-              <small style={{opacity:.55,fontWeight:800}}>{m.group}</small><strong style={{display:'block',marginTop:3}}>{i+1}. {m.item}</strong><span style={{fontSize:12,opacity:.6}}>{(selections[m.item]||[]).length} library picks</span>
-            </button>)}
+            {moments.map((m,i)=><div key={m.item} style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 105px',gap:8,alignItems:'stretch'}}>
+              <button onClick={()=>{setActive(m.item);setTab('MUSIC')}} style={{textAlign:'left',padding:13,borderRadius:10,border:active===m.item?'1px solid var(--accent)':'1px solid rgba(255,255,255,.08)',background:active===m.item?'rgba(255,255,255,.07)':'rgba(255,255,255,.02)',color:'var(--fg)',cursor:'pointer'}}>
+                <small style={{opacity:.55,fontWeight:800}}>{m.group}</small><strong style={{display:'block',marginTop:3}}>{i+1}. {m.item}</strong><span style={{fontSize:12,opacity:.6}}>{(selections[m.item]||[]).length} library picks</span>
+              </button>
+              <div style={{padding:'8px 9px',borderRadius:10,border:'1px solid rgba(255,255,255,.08)',background:'rgba(255,255,255,.02)'}}><label style={{display:'block',fontSize:10,fontWeight:800,opacity:.5,marginBottom:5}}>TIME</label><input type="time" className="input" value={timelineTimes[m.item]||''} onChange={e=>setTimelineTimes(x=>({...x,[m.item]:e.target.value}))} style={{padding:'8px 7px'}} /></div>
+            </div>)}
           </div>
           <div>
             <div className="panel" style={{background:'rgba(255,255,255,.025)'}}>
