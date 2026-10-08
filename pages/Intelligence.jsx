@@ -129,7 +129,7 @@ export default function Intelligence(){
   const loadLibrary = useCallback(async()=>{
     setLibraryBusy(true);
     try{
-      const [summary, knowledgeResult] = await Promise.all([api.librarySummary(), api.siDjKnowledge({ genre, era: era === 'ALL' ? '' : era, limit: 500 })]);
+      const [summary, knowledgeResult] = await Promise.all([api.librarySummary(), api.siDjKnowledge({ genre, era: era === 'ALL' ? '' : era, from_artist: bridge.nowPlaying?.artist || '', from_title: bridge.nowPlaying?.title || '', limit: 500 })]);
       setLibrarySummary(summary?.inventory || null);
       setKnowledgeTracks((knowledgeResult?.tracks || []).map(t => ({...t,bpm:Number(t.bpm)||0,energy:Number(t.energy)||0,dancefloor:Number(t.dancefloor||0),singalong:Number(t.singalong||0),crossgen:Number(t.crossgen||0),knowledge_match:true})));
       if(Number(summary?.inventory?.tracks || 0) > 0){
@@ -146,7 +146,8 @@ export default function Intelligence(){
       setKnowledgeTracks([]);
       toast(errorText(e));
     }finally{ setLibraryBusy(false); }
-  },[genre,era]);
+  },[genre,era,bridgeTrackKey]);
+  const bridgeTrackKey = (bridge.nowPlaying?.artist || '') + '|' + (bridge.nowPlaying?.title || '');
   useEffect(()=>{ loadLibrary(); },[loadLibrary]);
   useEffect(()=>{ localStorage.setItem('djrl_si_mode',mode); },[mode]);
   useEffect(()=>{ localStorage.setItem('djrl_si_playlist',JSON.stringify(playlist)); },[playlist]);
