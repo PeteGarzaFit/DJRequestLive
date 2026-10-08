@@ -11,6 +11,10 @@ export default function BridgeDownload(){
       <span className="bd-kicker">SUPER INTELLIGENCE DJ</span>
       <h1>SI DJ Bridge</h1>
       <p className="bd-lead">Connect your DJ software to DJ Request Live so SI DJ can understand what you are playing and help you decide what comes next.</p>
+      <div className="bd-launch">
+        <a className="bd-launch-btn" href="sidj-bridge://open">▶ Launch SI DJ Bridge</a>
+        <small>If the Bridge is already installed on this computer, this opens it and starts the local connection automatically.</small>
+      </div>
       <div className="bd-grid">
         <a className="bd-card" href={GITHUB_RELEASE + 'SI-DJ-Bridge.dmg'}>
           <span className="bd-icon"></span><b>Download for Mac</b><small>SI DJ Bridge desktop app</small><span className="bd-btn">Download Mac</span>
