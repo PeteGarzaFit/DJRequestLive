@@ -7,6 +7,7 @@ import Guest from './pages/Guest.jsx';
 import BridgeDownload from './pages/BridgeDownload.jsx';
 import Intelligence from './pages/Intelligence.jsx';
 import Curator from './pages/Curator.jsx';
+import NightOf from './pages/NightOf.jsx';
 import Toaster from './components/Toaster.jsx';
 
 function GuestRoute() {
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/bridge" element={<BridgeDownload />} />
         <Route path="/intelligence" element={<Intelligence />} />
         <Route path="/curate" element={<Curator />} />
+        <Route path="/event" element={<NightOf />} />
         <Route path="/dashboard" element={<Navigate to="/studio" replace />} />
         <Route path="/:slug" element={<GuestRoute />} />
       </Routes>
