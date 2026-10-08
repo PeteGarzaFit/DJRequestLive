@@ -6,7 +6,7 @@ on:
     - cron: '17 7 * * 1'
   push:
     paths-ignore:
-      - 'data/si-dj-knowledge.json'
+      - 'data/si-dj-knowledge/**'
 
 permissions:
   contents: write
@@ -24,6 +24,9 @@ jobs:
           node-version: 22
       - name: Build global music knowledge
         run: node scripts/build-si-dj-knowledge.mjs
+      - name: Validate generated dataset
+        run: |
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('data/si-dj-knowledge/manifest.json','utf8'));if(!m.track_count||!m.chunks?.length)throw new Error('Empty SI DJ knowledge dataset');console.log('Generated',m.track_count,'tracks across',m.chunks.length,'chunks')"
       - name: Commit refreshed knowledge
         run: |
           git config user.name "SI DJ Knowledge Bot"
