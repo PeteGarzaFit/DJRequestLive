@@ -89,31 +89,6 @@ export default function NightOf() {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      if (!plan.details?.eventDate || !plan.eventType || !plan.name) return;
-      try {
-        const eventKey = await eventMemoryKey(plan);
-        const result = await api.siDjEventMemories({ event_key: eventKey, limit: 1 });
-        if (alive && result?.memories?.[0]) {
-          const m = result.memories[0];
-          setMemory({
-            ...m,
-            totals: {
-              planned_tracks: Number(m.planned_track_count || 0),
-              played_tracks: Number(m.played_track_count || 0),
-              unique_played: Number(m.unique_played_count || 0),
-              planned_played: Number(m.planned_played_count || 0),
-              repeat_request_count: Number(m.repeat_request_count || 0)
-            }
-          });
-        }
-      } catch { /* Event memory is optional while offline. */ }
-    })();
-    return () => { alive = false; };
-  }, [plan]);
-
   function toggle(key) {
     setDone(x => {
       const next = { ...x, [key]: !x[key] };
@@ -129,11 +104,11 @@ export default function NightOf() {
 
   async function saveEventMemory() {
     if (!plan.details?.eventDate) {
-      toast('Set the event date in the Planner before saving event memory.');
+      toast('Set the event date in the Planner before consolidating event learning.');
       return;
     }
     if (!plan.eventType || !plan.name) {
-      toast('Save the event plan before saving event memory.');
+      toast('Save the event plan before consolidating event learning.');
       return;
     }
     setMemoryBusy(true);
@@ -285,11 +260,11 @@ export default function NightOf() {
           </section>
 
           <section className="panel">
-            <div className="eyebrow">PERMANENT EVENT MEMORY</div>
+            <div className="eyebrow">SI DJ EVENT LEARNING</div>
             <h2 style={{margin:'5px 0'}}>Teach SI DJ what happened.</h2>
-            <p className="hint">Save the completed event after the night. SI DJ records the planned songs, what was actually played, unplanned plays, skipped picks, repeated tracks, and repeated guest requests as performance evidence.</p>
-            <button className="btn btn-gold btn-block" onClick={saveEventMemory} disabled={memoryBusy}>{memoryBusy ? 'Saving event memory…' : memory ? 'UPDATE EVENT MEMORY' : 'SAVE EVENT MEMORY'}</button>
-            {memory && <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:7,marginTop:10}}>
+            <p className="hint">Consolidate the completed event into SI DJ's master learning database. SI DJ keeps the useful performance signals — played, planned, skipped and requested songs — and immediately purges the temporary event capture.</p>
+            <button className="btn btn-gold btn-block" onClick={saveEventMemory} disabled={memoryBusy || memory?.consolidated}>{memoryBusy ? 'Consolidating…' : memory?.consolidated ? 'LEARNING CONSOLIDATED' : 'CONSOLIDATE TO SI DJ'}</button>
+            {memory?.consolidated && <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:7,marginTop:10}}>
               {[
                 ['PLAYED',memory.totals?.played_tracks ?? 0],
                 ['UNIQUE',memory.totals?.unique_played ?? 0],
