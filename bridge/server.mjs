@@ -171,6 +171,21 @@ const server = http.createServer((req, res) => {
   }
 
   if (u.pathname === '/health' || u.pathname === '/now-playing') return out(res, 200, state);
+  
+  if (u.pathname === '/played') {
+    const configured = cfg().virtualdjHistory?.historyFile;
+    const file = configured || defaultVdjHistoryFile();
+    const entries = readHistory(file);
+    const after = Math.max(0, Number(u.searchParams.get('after') || 0));
+    return out(res, 200, {
+      connected: entries.length > 0,
+      source: 'virtualdj-history',
+      cursor: entries.length,
+      reset: after > entries.length,
+      entries: entries.slice(after),
+      updatedAt: Date.now()
+    });
+  }
 
   if (u.pathname === '/config') {
     return out(res, 200, {
