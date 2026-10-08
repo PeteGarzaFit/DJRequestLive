@@ -3,6 +3,14 @@ name: Build SI DJ Bridge
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+    paths:
+      - 'bridge/**'
+      - 'bridge-app/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-bridge.yml'
     tags:
       - 'bridge-v*'
 
