@@ -167,7 +167,6 @@ export function createApp(db) {
         if (!process.env.OPENAI_API_KEY) {
           return send(res, 200, { available: false, reason: 'ai_not_configured', lanes: MUSIC_LANES.map(({ key, label }) => ({ key, label, status: 'unavailable', items: [] })), subgenres: MUSIC_SUBGENRES }), true;
         }
-        const day = new Date().toISOString().slice(0, 10);
         if (!globalThis.__sidjMusicIntel) globalThis.__sidjMusicIntel = { day: null, data: null, promise: null };
         const cache = globalThis.__sidjMusicIntel;
         if (cache.day === day && cache.data) {
