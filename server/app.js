@@ -161,16 +161,18 @@ export function createApp(db) {
 
       if (path === '/api/ai/music-intelligence' && method === 'GET') {
         const u = await requireUser(req);
+        const day = new Date().toISOString().slice(0, 10);
+        if (!globalThis.__sidjMusicIntel) globalThis.__sidjMusicIntel = { day: null, data: null, promise: null };
+        const cache = globalThis.__sidjMusicIntel;
+
+        if (cache.day === day && cache.data) {
+          return send(res, 200, { available: true, cached: true, ...cache.data, subgenres: MUSIC_SUBGENRES }), true;
+        }
         if (limited(`music-intel:${u.id}`, 3, 86400000)) {
           return send(res, 200, { available: false, cached: true, lanes: MUSIC_LANES.map(({ key, label }) => ({ key, label, status: 'cached-limit', items: [] })), subgenres: MUSIC_SUBGENRES }), true;
         }
         if (!process.env.OPENAI_API_KEY) {
           return send(res, 200, { available: false, reason: 'ai_not_configured', lanes: MUSIC_LANES.map(({ key, label }) => ({ key, label, status: 'unavailable', items: [] })), subgenres: MUSIC_SUBGENRES }), true;
-        }
-        if (!globalThis.__sidjMusicIntel) globalThis.__sidjMusicIntel = { day: null, data: null, promise: null };
-        const cache = globalThis.__sidjMusicIntel;
-        if (cache.day === day && cache.data) {
-          return send(res, 200, { available: true, cached: true, ...cache.data, subgenres: MUSIC_SUBGENRES }), true;
         }
         if (!cache.promise) {
           cache.promise = (async () => {
