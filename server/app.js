@@ -746,18 +746,22 @@ ${JSON.stringify(library)}`;
 
         let eventMemoryMap = new Map();
         if (eventType) {
+          // Event memory is temporary. Read consolidated signals from durable SI DJ context.
           const memoryRows = await db.all(
-            `SELECT t.artist,t.title,SUM(t.played_count) AS memory_play_count,COUNT(DISTINCT m.id) AS memory_event_count,SUM(t.request_count) AS memory_request_count
-             FROM si_dj_event_memory_tracks t
-             JOIN si_dj_event_memory m ON m.id = t.memory_id
-             WHERE m.user_id = ? AND m.event_type = ? AND (? = '' OR t.moments_json LIKE ?)
-             GROUP BY t.artist,t.title
+            `SELECT lt.artist,lt.title,
+                    SUM(c.play_count) AS memory_play_count,
+                    SUM(c.event_count) AS memory_event_count,
+                    SUM(c.request_count) AS memory_request_count
+             FROM si_dj_learning_context c
+             JOIN si_dj_learning_tracks lt ON lt.id = c.track_id
+             WHERE c.event_type = ? AND (? = '' OR c.event_moment = ?)
+             GROUP BY c.track_id,lt.artist,lt.title
              ORDER BY memory_play_count DESC,memory_request_count DESC
              LIMIT 1000`,
-            [u.id,eventType,fromMoment,'%' + fromMoment + '%']
+            [eventType,fromMoment,fromMoment]
           );
           eventMemoryMap = new Map(memoryRows.map((x) => [
-            normalizeLibraryQuery(x.artist) + '\u0000' + normalizeLibraryQuery(x.title), x
+            normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x
           ]));
         }
 
