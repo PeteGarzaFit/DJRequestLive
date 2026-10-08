@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { AI_PLAN_SYSTEM } from '../lib/aiPlanner.js';
 import { songRows } from '../lib/songLibrary.js';
 import { fetchMusicIntelligence, MUSIC_LANES, MUSIC_SUBGENRES } from '../lib/musicIntelligence.js';
+import { searchSiDjKnowledge, siDjKnowledgeSummary } from '../lib/siDjKnowledge.js';
 
 const RESERVED = ['studio', 'login', 'signup', 'dashboard', 'api', 'admin', 'assets', 'media', 'privacy', 'terms', 'help', 'index', 'app', 'www'];
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{2,29}$/;
@@ -280,6 +281,17 @@ ${JSON.stringify(library)}`;
             return send(res, 503, { error: 'planner_unavailable', message: 'The planner could not generate a safe result from the curated library.' }), true;
           }
         }
+      }
+
+      if (path === '/api/si-dj/knowledge' && method === 'GET') {
+        await requireUser(req);
+        const q = String(url.searchParams.get('q') || '').trim();
+        const artist = String(url.searchParams.get('artist') || '').trim();
+        const genre = String(url.searchParams.get('genre') || '').trim();
+        const era = String(url.searchParams.get('era') || '').trim();
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 500);
+        const tracks = searchSiDjKnowledge({ q, artist, genre, era, limit });
+        return send(res, 200, { knowledge: siDjKnowledgeSummary(), tracks }), true;
       }
 
       if (path === '/api/library/summary' && method === 'GET') {
