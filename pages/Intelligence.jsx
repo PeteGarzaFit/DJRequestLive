@@ -9,7 +9,7 @@ const GENRES = [
   ['Country','#2f8fce'],['Texas Country','#2b74d6'],['Red Dirt','#2e9b73'],['Pop','#8b5cf6'],
   ['Hip-Hop','#d946ef'],['R&B','#ec4899'],['Rock','#e05252'],['Dance / EDM','#f59e0b'],
   ['Disco / Funk','#eab308'],['Latin','#8b5cf6'],['Reggaeton','#c026d3'],['Regional Mexican','#dc2626'],
-  ['Tejano','#16a34a'],['Conjunto','#65a30d'],['Norteño','#ca8a04'],['Cumbia','#f97316']
+  ['Tejano','#16a34a'],['Conjunto','#65a30d'],['Norteño','#ca8a04'],['Cumbia','#f97316'],['West Coast Swing','#0ea5e9']
 ];
 const VIBES = [
   ['KEEP VIBE','#64748b'],['RAISE ENERGY','#ef4444'],['DANCE','#f59e0b'],['PARTY','#ec4899'],
@@ -50,6 +50,7 @@ function genreMatches(s, selected){
   if(wanted === 'disco funk') return g.includes('disco') || g.includes('funk') || tags.includes('disco') || tags.includes('funk');
   if(wanted === 'regional mexican') return g.includes('regional mexican') || tags.includes('regionalmexican');
   if(wanted === 'norteno') return g.includes('norteno') || tags.includes('norteno');
+  if(wanted === 'west coast swing') return g.includes('west coast swing') || g === 'wcs' || tags.includes('westcoastswing') || tags.includes('wcs');
   if(wanted === 'latin') return g.includes('latin') || tags.includes('latin');
   return g.includes(wanted) || tags.includes(wanted);
 }
@@ -102,6 +103,9 @@ export default function Intelligence(){
   const [query,setQuery]=useState('');
   const [ai,setAi]=useState([]);
   const [aiBusy,setAiBusy]=useState(false);
+  const [librarySummary,setLibrarySummary]=useState(null);
+  const [libraryTracks,setLibraryTracks]=useState([]);
+  const [libraryBusy,setLibraryBusy]=useState(true);
 
   const loadBridge=useCallback(async()=>{
     try{
@@ -114,6 +118,27 @@ export default function Intelligence(){
   },[]);
   useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2000); return()=>clearInterval(t); },[loadBridge]);
 
+  const loadLibrary = useCallback(async()=>{
+    setLibraryBusy(true);
+    try{
+      const summary = await api.librarySummary();
+      setLibrarySummary(summary?.inventory || null);
+      if(Number(summary?.inventory?.tracks || 0) > 0){
+        const result = await api.librarySearch({ genre: genre === 'West Coast Swing' ? 'West Coast Swing' : genre, limit: 100 });
+        setLibraryTracks((result?.tracks || []).map(t=>({
+          ...t,
+          era: t.year ? (Number(t.year)>=2020?'2020s':Number(t.year)>=2010?'2010s':Number(t.year)>=2000?'2000s':Number(t.year)>=1990?'90s':Number(t.year)>=1980?'80s':Number(t.year)>=1970?'70s':'CLASSICS') : 'CLASSICS',
+          tags: genre === 'West Coast Swing' ? 'westcoastswing,wcs' : '',
+        })));
+      }else setLibraryTracks([]);
+    }catch(e){
+      setLibrarySummary(null);
+      setLibraryTracks([]);
+      toast(errorText(e));
+    }finally{ setLibraryBusy(false); }
+  },[genre]);
+  useEffect(()=>{ loadLibrary(); },[loadLibrary]);
+
   const filters={genre,vibe,era};
   const artistFilter = useMemo(()=>{
     const q = query.trim();
@@ -123,7 +148,8 @@ export default function Intelligence(){
   },[query]);
 
   const local=useMemo(()=>{
-    let rows=songRows();
+    if(libraryBusy || !Number(librarySummary?.tracks || 0)) return [];
+    let rows=libraryTracks;
     if(artistFilter){
       rows=rows.filter(s=>normalizeArtist(s.artist)===normalizeArtist(artistFilter));
     }else if(query.trim()){
@@ -133,7 +159,7 @@ export default function Intelligence(){
     rows=rows.filter(s=>genreMatches(s,genre) && eraMatches(s,era));
     return rows.map(s=>({...s,_score:scoreSong(s,filters,bridge.nowPlaying)}))
       .sort((a,b)=>b._score-a._score || diversityScore(a,refreshNonce)-diversityScore(b,refreshNonce));
-  },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce]);
+  },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce,libraryBusy,librarySummary,libraryTracks]);
 
   useEffect(()=>{
     setVisibleCount(10);
@@ -209,7 +235,7 @@ export default function Intelligence(){
         <p className="hint" style={{marginTop:0}}>Choose a lane. SI DJ narrows the library so you don't dig through crates.</p>
         <div className="eyebrow" style={{marginTop:20}}>GENRE</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
-          {GENRES.map(([g,c])=><button key={g} onClick={()=>{setGenre(g);setAi([])}} style={{minHeight:48,textAlign:'left',padding:'10px 12px',borderRadius:9,border:genre===g?'2px solid '+c:'1px solid '+c+'66',background:genre===g?c+'30':'rgba(255,255,255,.035)',color:'var(--fg)',boxShadow:genre===g?'0 0 18px '+c+'38':'none',fontWeight:800,cursor:'pointer'}}>{g}</button>)}
+          {GENRES.map(([g,c])=><button key={g} onClick={()=>{setGenre(current=>current===g?'':g);setAi([])}} style={{minHeight:48,textAlign:'left',padding:'10px 12px',borderRadius:9,border:genre===g?'2px solid '+c:'1px solid '+c+'66',background:genre===g?c+'30':'rgba(255,255,255,.035)',color:'var(--fg)',boxShadow:genre===g?'0 0 18px '+c+'38':'none',fontWeight:800,cursor:'pointer'}}>{g}</button>)}
         </div>
         <div className="eyebrow" style={{marginTop:22}}>VIBE / MOVE</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
@@ -233,7 +259,9 @@ export default function Intelligence(){
               <div style={{textAlign:'right'}}><b>{s.bpm ? s.bpm+' BPM' : ''}</b>{s.move && <small style={{display:'block'}}>{s.move}</small>}<button className="btn btn-ghost btn-sm" style={{marginTop:5}} onClick={()=>navigator.clipboard?.writeText((s.title||'')+' — '+(s.artist||''))}>Copy</button></div>
             </article>)}
           </div>
-          {!display.length && <p className="hint">{artistFilter ? 'No '+artistFilter+' tracks match the current hard filters. Remove an era or genre control to widen the search.' : 'No matches. Change one hard filter or search term to widen the shortlist.'}</p>}
+          {!display.length && libraryBusy && <p className="hint">Checking your private SI DJ library…</p>}
+          {!display.length && !libraryBusy && Number(librarySummary?.tracks || 0) === 0 && <div className="ai-pill" style={{marginTop:12}}>SI DJ LIBRARY EMPTY — connect the SI DJ Bridge and scan your music library to populate this list.</div>}
+          {!display.length && !libraryBusy && Number(librarySummary?.tracks || 0) > 0 && <p className="hint">{artistFilter ? 'No '+artistFilter+' tracks match the current hard filters. Remove an era or genre control to widen the search.' : 'No matches. Change one hard filter or search term to widen the shortlist.'}</p>}
           {display.length < displayPool.length && <button className="btn btn-ghost btn-block" style={{marginTop:12}} onClick={()=>setVisibleCount(n=>Math.min(n+10,displayPool.length))}>MORE TRACKS →</button>}
           {display.length >= displayPool.length && displayPool.length > 0 && <p className="hint" style={{marginTop:10}}>Showing all {displayPool.length} matching tracks — no unrelated songs added.</p>}
         </section>
