@@ -90,14 +90,17 @@ function SIDJCommandCenter({ reqs }) {
 
   const analyze = useCallback(async () => {
     const active = reqs.filter((r) => r.status !== 'declined');
-    if (!active.length && !bridge.nowPlaying) { setIntel(null); return; }
+    if (!active.length && !bridge.nowPlaying) {
+      setIntel(null);
+      return;
+    }
     setBusy(true);
     try {
       const top = [...active].sort((a,b) => (Number(b.tip)||0) - (Number(a.tip)||0) || b.created_at - a.created_at).slice(0,30);
-      const requestText = top.map((r) => (r.song||'') + (r.artist ? ' — ' + r.artist : '') + (r.tip ? ' [$' + Number(r.tip).toFixed(0) + ' tip]' : '') + (r.status === 'played' ? ' [PLAYED]' : '')).join('\\n');
+      const requestText = top.map((r) => (r.song||'') + (r.artist ? ' — ' + r.artist : '') + (r.tip ? ' [$' + Number(r.tip).toFixed(0) + ' tip]' : '') + (r.status === 'played' ? ' [PLAYED]' : '')).join('\n');
       const played = active.filter((r) => r.status === 'played').slice(0,20).map((r) => r.song + (r.artist ? ' — ' + r.artist : '')).join(', ');
       const now = bridge.nowPlaying;
-      const liveTrack = now ? (now.title || 'Unknown title') + (now.artist ? ' — ' + now.artist : '') + (now.bpm ? ' · ' + now.bpm + ' BPM' : '') + (now.key ? ' · ' + now.key : '') + (now.genre ? ' · ' + now.genre : '') : 'No live track available';
+      const liveTrack = now ? (now.title || 'Unknown title') + ' — ' + (now.artist || 'Unknown artist') + (now.bpm ? ' · ' + now.bpm + ' BPM' : '') + (now.key ? ' · ' + now.key : '') + (now.genre ? ' · ' + now.genre : '') : 'No live track available';
       const event = [
         'LIVE SI DJ INTELLIGENCE.',
         'This is a real-time DJ event, not a generic event plan.',
@@ -118,7 +121,7 @@ function SIDJCommandCenter({ reqs }) {
         'LIVE REQUESTS:', requestText || 'none',
         'RECENT PLAYED REQUESTS:', played || 'none',
         'Return the strongest useful next-song options first.'
-      ].join('\\n');
+      ].join('\n');
       const { plan, planner_source } = await api.aiEventPlan(event);
       const songs = (plan?.recommendations || []).flatMap((g) => (g.songs || []).map((s) => ({ ...s, phase: g.phase }))).slice(0,8);
       const text = requestText.toLowerCase();
@@ -137,6 +140,7 @@ function SIDJCommandCenter({ reqs }) {
         songs
       });
     } catch (e) {
+      setIntel(null);
       toast(errorText(e));
     } finally {
       setBusy(false);
@@ -158,55 +162,112 @@ function SIDJCommandCenter({ reqs }) {
   }, [reqs, bridge.nowPlaying, analyze]);
 
   const now = bridge.nowPlaying;
+  const activeReqs = reqs.filter((r) => r.status !== 'declined');
+  const paid = activeReqs.filter((r) => r.paid).reduce((s, r) => s + Number(r.tip || 0), 0);
+  const pendingTips = activeReqs.filter((r) => !r.paid).reduce((s, r) => s + Number(r.tip || 0), 0);
+  const played = reqs.filter((r) => r.status === 'played');
+  const requestGenres = ['Country', 'Texas Country', 'Hip-Hop', 'R&B', 'Latin', 'Tejano', 'Dance', 'Rock'];
+  const requestText = activeReqs.map((r) => (r.song || '') + ' ' + (r.artist || '') + ' ' + (r.note || '')).join(' ').toLowerCase();
+  const roomSignals = requestGenres.map((g) => ({ label: g, n: requestText.split(g.toLowerCase()).length - 1 })).filter((x) => x.n > 0).sort((a,b) => b.n - a.n).slice(0, 4);
+
   return (<section className="panel sidj-command">
     <div className="shead">
-      <div><div className="eyebrow">SUPER INTELLIGENCE DJ</div><strong style={{ display:'block', marginTop:4, fontSize:18 }}>Live Set Intelligence</strong></div>
-      <button className="btn btn-ghost btn-sm" onClick={analyze} disabled={busy}>{busy ? 'Reading the room…' : 'Analyze room'}</button>
+      <div>
+        <div className="eyebrow">SUPER INTELLIGENCE DJ</div>
+        <strong style={{ display:'block', marginTop:4, fontSize:18 }}>Live Set Intelligence</strong>
+        <span className="hint">Your live DJ information center — not just a request queue.</span>
+      </div>
+      <button className="btn btn-ghost btn-sm" onClick={analyze} disabled={busy}>{busy ? 'Analyzing…' : 'Analyze room'}</button>
     </div>
+
     <div className="sidj-livebar" style={{ display:'grid', gridTemplateColumns:'minmax(0,1fr) auto', gap:12, alignItems:'center', padding:'14px 16px', margin:'14px 0 18px', border:'1px solid rgba(255,255,255,.10)', borderRadius:14 }}>
       <div>
         <div className="eyebrow">{bridge.connected ? 'BRIDGE CONNECTED' : 'BRIDGE OFFLINE'}</div>
         <strong style={{ display:'block', marginTop:4 }}>{now ? now.title : 'Waiting for DJ software…'}</strong>
-        <span className="hint">{now ? [now.artist, now.bpm ? now.bpm + ' BPM' : '', now.key || '', now.genre || ''].filter(Boolean).join(' · ') : (bridge.error || 'Start SI DJ Bridge on the DJ computer.')}</span>
+        <span className="hint">{now ? [now.artist, now.bpm ? now.bpm + ' BPM' : '', now.key || '', now.genre || ''].filter(Boolean).join(' · ') : (bridge.error || 'Launch SI DJ Bridge on the DJ computer.')}</span>
       </div>
       <div style={{ textAlign:'right' }}>
         <div className="eyebrow">SOURCE</div>
         <strong>{bridge.source || '—'}</strong>
-        {!bridge.connected && <div style={{ marginTop:6 }}><Link className="btn btn-ghost btn-sm" to="/bridge">Get Bridge</Link></div>}
+        {!bridge.connected && <div style={{ marginTop:6 }}><Link className="btn btn-ghost btn-sm" to="/bridge">Launch Bridge</Link></div>}
       </div>
     </div>
-    {!reqs.length && !now ? <p className="hint">Waiting for crowd signals and live DJ software context. Requests, tips, played history, and the Bridge feed will drive SI DJ.</p> : !intel ? <p className="hint">SI DJ is reading the live set context and crowd signals.</p> : <>
+
+    <div className="sidj-grid">
+      <div className="sidj-card"><b>SET STATUS</b><strong>{now ? 'LIVE' : 'WAITING'}</strong><span>{now ? 'DJ software track detected' : 'Waiting for Bridge context'}</span></div>
+      <div className="sidj-card"><b>REQUESTS</b><strong>{activeReqs.length}</strong><span>{activeReqs.length === 1 ? 'active crowd request' : 'active crowd requests'}</span></div>
+      <div className="sidj-card"><b>TIP SIGNAL</b><strong>{'$'}{paid.toFixed(0)}</strong><span>{pendingTips ? '$' + pendingTips.toFixed(0) + ' still to confirm' : 'No unpaid tip requests'}</span></div>
+      <div className="sidj-card"><b>PLAYED HISTORY</b><strong>{played.length}</strong><span>requests marked played</span></div>
+    </div>
+
+    <div className="sidj-section">
+      <div className="eyebrow">CURRENT TRACK INTELLIGENCE</div>
+      {now ? <div className="sidj-row">
+        <div><strong>{now.title || 'Unknown title'}</strong><span>{now.artist || 'Unknown artist'}</span><small>{[now.genre, now.bpm ? now.bpm + ' BPM' : '', now.key ? 'Key ' + now.key : ''].filter(Boolean).join(' · ') || 'Bridge is supplying live track context.'}</small></div>
+        <b>{now.bpm ? now.bpm + ' BPM' : 'LIVE'}</b>
+      </div> : <p className="hint">No current track yet. Launch the Bridge and SI DJ will anchor its intelligence to the DJ software.</p>}
+    </div>
+
+    <div className="sidj-section">
+      <div className="eyebrow">ROOM PULSE</div>
       <div className="sidj-grid">
-        <div className="sidj-card"><b>LIVE SIGNAL</b><strong>{intel.signals.length ? intel.signals.map(x => x.g).join(' · ') : 'Mixed room'}</strong><span>Request momentum</span></div>
-        <div className="sidj-card"><b>TIP SIGNAL</b><strong>{'$'}{intel.paid.toFixed(0)}</strong><span>Paid requests</span></div>
-        <div className="sidj-card"><b>REPEAT SIGNAL</b><strong>{intel.repeat ? intel.repeat.count + '×' : '—'}</strong><span>{intel.repeat ? intel.repeat.song : 'No repeat request yet'}</span></div>
+        <div className="sidj-card"><b>GENRE MOMENTUM</b><strong>{roomSignals.length ? roomSignals.map(x => x.label).join(' · ') : 'No clear signal yet'}</strong><span>{roomSignals.length ? 'Based on current requests' : 'Requests will shape this automatically'}</span></div>
+        <div className="sidj-card"><b>HIGHEST TIP</b><strong>{activeReqs.length ? '$' + Math.max(...activeReqs.map(r => Number(r.tip || 0))).toFixed(0) : '$0'}</strong><span>{activeReqs.length ? 'strongest current request' : 'Waiting for requests'}</span></div>
+        <div className="sidj-card"><b>REPEAT REQUESTS</b><strong>{intel?.repeat ? intel.repeat.count + '×' : '—'}</strong><span>{intel?.repeat ? intel.repeat.song : 'No repeat signal yet'}</span></div>
       </div>
-      <div className="sidj-section">
-        <div className="eyebrow">CURRENT TRACK ANCHOR</div>
-        {now ? <div className="sidj-row"><div><strong>{now.title || 'Unknown title'}</strong><span>{now.artist || 'Unknown artist'}</span></div><b>{now.bpm ? now.bpm + ' BPM' : now.key || 'LIVE'}</b></div> : <p className="hint">No current track is available from the Bridge.</p>}
+    </div>
+
+    <div className="sidj-section">
+      <div className="eyebrow">LIVE CROWD SIGNALS</div>
+      {activeReqs.length ? activeReqs.slice().sort((a,b) => Number(b.tip||0) - Number(a.tip||0) || b.created_at - a.created_at).slice(0,5).map((r) =>
+        <div className="sidj-row" key={r.id}><div><strong>{r.song}</strong><span>{r.artist || 'Artist not supplied'}{r.from ? ' · from ' + r.from : ''}</span></div><b>{'$'}{Number(r.tip||0).toFixed(0)}</b></div>
+      ) : <p className="hint">No crowd requests yet. This space will fill automatically as guests scan your QR code and request songs.</p>}
+    </div>
+
+    <div className="sidj-section">
+      <div className="eyebrow">MUSIC INTELLIGENCE</div>
+      {musicIntelBusy ? <p className="hint">Loading current chart and music intelligence data…</p> :
+        musicIntel?.available && (musicIntel.lanes || []).some((lane) => lane.items?.length) ? <>
+          <div className="sidj-grid">
+            {(musicIntel.lanes || []).filter((lane) => lane.items?.length).slice(0, 8).map((lane) => {
+              const x = lane.items[0];
+              return <div className="sidj-card" key={lane.key}>
+                <b>{lane.label}</b>
+                <strong>{x.title}</strong>
+                <span>{x.artist}{x.position ? ' · #' + x.position : ''}{x.trend ? ' · ' + x.trend : ''}</span>
+              </div>;
+            })}
+          </div>
+          <p className="hint" style={{ marginTop: 8 }}>Fresh intelligence across national, Texas Country/Red Dirt, Regional Mexican, Tejano/Conjunto, Latin, hip-hop, dance and party lanes.</p>
+        </> : <div className="sidj-grid">
+          <div className="sidj-card"><b>CHARTS</b><strong>Ready</strong><span>Live chart intelligence will appear here when available.</span></div>
+          <div className="sidj-card"><b>REGIONAL</b><strong>Texas + Latin</strong><span>Regional music lanes are part of the intelligence engine.</span></div>
+          <div className="sidj-card"><b>DJ CONTEXT</b><strong>Bridge + Requests</strong><span>SI DJ can still reason from your live set context.</span></div>
+        </div>}
+    </div>
+
+    <div className="sidj-section">
+      <div className="eyebrow">WHAT SI DJ IS WATCHING</div>
+      <div className="sidj-grid">
+        {['Current track & transition compatibility','Crowd request momentum','Tips and high-value requests','Repeat requests and played history','Genre / regional momentum','Fresh music and chart signals'].map((x) =>
+          <div className="sidj-card" key={x}><b>SI DJ</b><strong>Watching</strong><span>{x}</span></div>
+        )}
       </div>
-      <div className="sidj-section">
-        <div className="eyebrow">TOP REQUEST SIGNALS</div>
-        {intel.topRequests.map((r) => <div className="sidj-row" key={r.id}><div><strong>{r.song}</strong>{r.artist && <span>{r.artist}</span>}</div><b>{'$'}{Number(r.tip||0).toFixed(0)}</b></div>)}
-      </div>
-      <div className="sidj-section">
-        <div className="eyebrow">MUSIC INTELLIGENCE</div>
-        {musicIntelBusy ? <p className="hint">Pulling the latest national, Texas, regional Mexican, Latin and club music data…</p> :
-          musicIntel?.available ? <>
-            <div className="sidj-grid">
-              {(musicIntel.lanes || []).filter((lane) => lane.items?.length).slice(0, 6).map((lane) =>
-                <div className="sidj-card" key={lane.key}><b>{lane.label}</b><strong>{lane.items[0].title}</strong><span>{lane.items[0].artist}{lane.items[0].position ? ' · #' + lane.items[0].position : ''}</span></div>
-              )}
-            </div>
-            <p className="hint" style={{ marginTop: 8 }}>Fresh snapshot loaded for this DJ session · includes Billboard, Texas Country/Red Dirt, Tejano/Conjunto, Regional Mexican, Latin, hip-hop, dance and party lanes.</p>
-          </> : <p className="hint">Music chart snapshot unavailable right now. SI DJ will continue using live Bridge, request and curated-library signals.</p>}
-      </div>
-      <div className="sidj-section">
-        <div className="eyebrow">WHAT SHOULD I CONSIDER NEXT?</div>
-        {intel.songs.map((s,i) => <div className="sidj-row" key={s.title + '-' + s.artist + '-' + i}><div><strong>{s.title}</strong><span>{s.artist}</span><small>{s.reason || 'Strong fit using the live set context and curated SI DJ library.'}</small></div><button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(s.title + ' — ' + s.artist)}>Copy</button></div>)}
-      </div>
-      <p className="hint">SI DJ is your second brain — the DJ makes the final call. Source: {intel.planner_source === 'ai' ? 'AI + live Bridge context + curated library' : 'curated fallback intelligence + live Bridge context'}.</p>
-    </>}
+    </div>
+
+    {intel?.songs?.length ? <div className="sidj-section">
+      <div className="eyebrow">AI NEXT-SONG OPTIONS</div>
+      {intel.songs.map((s,i) => <div className="sidj-row" key={s.title + '-' + s.artist + '-' + i}>
+        <div><strong>{s.title}</strong><span>{s.artist}</span><small>{s.reason || 'Strong fit using the live set context.'}</small></div>
+        <button className="btn btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(s.title + ' — ' + s.artist)}>Copy</button>
+      </div>)}
+      <p className="hint" style={{ marginTop: 8 }}>Source: {intel.planner_source === 'ai' ? 'AI + live Bridge context + music intelligence' : 'curated fallback intelligence + live Bridge context'}.</p>
+    </div> : <div className="sidj-section">
+      <div className="eyebrow">AI SET ADVISOR</div>
+      <p className="hint">{now ? 'Click Analyze room for AI next-song options anchored to the track currently playing.' : 'Connect the Bridge to unlock track-aware AI next-song options.'}</p>
+    </div>}
+
+    <p className="hint">SI DJ is your second brain — the DJ makes the final call. It observes the room; it never sends an automatic play command.</p>
   </section>);
 }
 
