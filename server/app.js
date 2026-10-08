@@ -4,7 +4,7 @@ import OpenAI from 'openai';
 import { AI_PLAN_SYSTEM } from '../lib/aiPlanner.js';
 import { songRows } from '../lib/songLibrary.js';
 import { fetchMusicIntelligence, MUSIC_LANES, MUSIC_SUBGENRES } from '../lib/musicIntelligence.js';
-import { searchSiDjKnowledge, siDjKnowledgeSummary } from '../lib/siDjKnowledge.js';
+import { searchSiDjKnowledge, siDjKnowledgeSummary, ensureSiDjKnowledge } from '../lib/siDjKnowledge.js';
 
 const RESERVED = ['studio', 'login', 'signup', 'dashboard', 'api', 'admin', 'assets', 'media', 'privacy', 'terms', 'help', 'index', 'app', 'www'];
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{2,29}$/;
@@ -285,6 +285,7 @@ ${JSON.stringify(library)}`;
 
       if (path === '/api/si-dj/knowledge' && method === 'GET') {
         await requireUser(req);
+        await ensureSiDjKnowledge();
         const q = String(url.searchParams.get('q') || '').trim();
         const artist = String(url.searchParams.get('artist') || '').trim();
         const genre = String(url.searchParams.get('genre') || '').trim();
