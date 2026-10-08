@@ -81,41 +81,43 @@ export default function Studio() {
   useEffect(() => {
     let alive = true;
     let timerId = null;
-    const lastSignature = { value: (() => { try { return localStorage.getItem('djrl_si_last_bridge_play') || ''; } catch { return ''; } })() };
+    let cursor = Number(localStorage.getItem('djrl_si_bridge_cursor') || 0);
 
     const pollAndLearn = async () => {
       try {
-        const r = await fetch('http://127.0.0.1:8765/now-playing', { cache: 'no-store' });
+        const r = await fetch('http://127.0.0.1:8765/played?after=' + encodeURIComponent(cursor), { cache: 'no-store' });
         if (!r.ok) return;
-        const bridge = await r.json();
-        const track = bridge?.nowPlaying;
-        if (!bridge?.connected || !track?.artist || !track?.title) return;
-
-        const signature = [bridge.source || 'bridge', track.raw || '', track.artist, track.title].join('|');
-        if (signature === lastSignature.value) return;
-
-        const eventKey = await siDjEventKey(signature + '|' + String(Date.now()));
-        const playedAt = bridgePlayedAt(track);
-        await api.siDjRecordPlay({
-          event_key: eventKey,
-          played_at: playedAt,
-          artist: track.artist,
-          title: track.title,
-          source: bridge.source || 'bridge',
-          raw: track.raw || '',
-          ...currentEventContext(playedAt)
-        });
-
-        if (!alive) return;
-        lastSignature.value = signature;
-        try { localStorage.setItem('djrl_si_last_bridge_play', signature); } catch { /* ignore */ }
+        const history = await r.json();
+        if (history.reset) cursor = 0;
+        const entries = Array.isArray(history.entries) ? history.entries : [];
+        for (const track of entries) {
+          const playedAt = track.date
+            ? new Date(String(track.date).replaceAll('/', '-') + 'T' + String(track.time || '00:00') + ':00').getTime()
+            : Date.now();
+          const signature = [history.source || 'bridge', track.date || '', track.time || '', track.artist, track.title].join('|');
+          const eventKey = await siDjEventKey(signature);
+          await api.siDjRecordPlay({
+            event_key: eventKey,
+            played_at: Number.isFinite(playedAt) ? playedAt : Date.now(),
+            artist: track.artist,
+            title: track.title,
+            source: history.source || 'bridge',
+            raw: track.raw || '',
+            ...currentEventContext(playedAt)
+          });
+        }
+        if (history.reset) cursor = entries.length;
+        else cursor = Number(history.cursor || (cursor + entries.length));
+        if (alive) {
+          try { localStorage.setItem('djrl_si_bridge_cursor', String(cursor)); } catch { /* ignore */ }
+        }
       } catch {
         // Bridge or learning API can be offline without interrupting the Studio.
       }
     };
 
     pollAndLearn();
-    timerId = setInterval(pollAndLearn, 2000);
+    timerId = setInterval(pollAndLearn, 3000);
     return () => { alive = false; if (timerId) clearInterval(timerId); };
   }, []);
 
