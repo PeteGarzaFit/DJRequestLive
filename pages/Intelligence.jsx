@@ -63,6 +63,22 @@ export default function Intelligence(){
   const filters={genre,vibe,era};
   const local=useMemo(()=>{
     let rows=songRows();
+    const selected = String(genre || '').toLowerCase();
+    if (selected) {
+      rows = rows.filter(s => {
+        const g = String(s.genre || '').toLowerCase();
+        const tags = String(s.tags || '').toLowerCase();
+        if (selected === 'texas country') return g.includes('texas country') || tags.includes('texascountry');
+        if (selected === 'red dirt') return g.includes('red dirt') || tags.includes('red dirt');
+        if (selected === 'hip-hop') return g.includes('hip-hop') || tags.includes('hiphop');
+        if (selected === 'r&b') return g.includes('r&b') || tags.includes('rnb');
+        if (selected === 'dance / edm') return g.includes('dance') || g.includes('edm') || tags.includes('dance');
+        if (selected === 'disco / funk') return g.includes('disco') || g.includes('funk') || tags.includes('disco') || tags.includes('funk');
+        if (selected === 'regional mexican') return g.includes('regional mexican') || tags.includes('regionalmexican');
+        if (selected === 'norteño') return g.includes('norteño') || g.includes('norteno') || tags.includes('norteño') || tags.includes('norteno');
+        return g.includes(selected) || tags.includes(selected);
+      });
+    }
     if(query.trim()){
       const q=query.toLowerCase();
       rows=rows.filter(s=>haystack(s).includes(q));
