@@ -129,11 +129,14 @@ export function createApp(db) {
     const playedAt = Math.max(0, Number(b.played_at) || Date.now());
     const source = str(b.source || 'bridge', 60);
     const raw = str(b.raw || '', 1000);
+    const eventType = str(b.event_type || '', 80);
+    const eventMoment = str(b.event_moment || '', 160);
+    const eventKeyContext = str(b.event_key_context || '', 160);
 
     try {
       await db.run(
-        'INSERT INTO si_dj_play_history (user_id,event_key,played_at,artist,title,source,raw_line,created_at) VALUES (?,?,?,?,?,?,?,?)',
-        [u.id,eventKey,playedAt,artist,title,source,raw,Date.now()]
+        'INSERT INTO si_dj_play_history (user_id,event_key,played_at,artist,title,source,raw_line,event_type,event_moment,event_key_context,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        [u.id,eventKey,playedAt,artist,title,source,raw,eventType,eventMoment,eventKeyContext,Date.now()]
       );
     } catch (e) {
       if (/duplicate|unique/i.test(String(e?.message || e?.code || ''))) {
@@ -177,6 +180,25 @@ export function createApp(db) {
         [track.id,u.id,playedAt,playedAt]
       );
       await db.run('UPDATE si_dj_learning_tracks SET dj_count = dj_count + 1 WHERE id = ?', [track.id]);
+    }
+
+
+    if (eventType) {
+      const context = await db.get(
+        'SELECT * FROM si_dj_learning_context WHERE track_id = ? AND event_type = ? AND event_moment = ?',
+        [track.id,eventType,eventMoment]
+      );
+      if (context) {
+        await db.run(
+          'UPDATE si_dj_learning_context SET play_count = play_count + 1,last_played = ? WHERE track_id = ? AND event_type = ? AND event_moment = ?',
+          [playedAt,track.id,eventType,eventMoment]
+        );
+      } else {
+        await db.run(
+          'INSERT INTO si_dj_learning_context (track_id,event_type,event_moment,play_count,dj_count,last_played) VALUES (?,?,?,?,?,?)',
+          [track.id,eventType,eventMoment,1,1,playedAt]
+        );
+      }
     }
 
     const previous = await db.get(
@@ -429,6 +451,9 @@ ${JSON.stringify(library)}`;
         const genre = String(url.searchParams.get('genre') || '').trim();
         const era = String(url.searchParams.get('era') || '').trim();
         const fromArtist = String(url.searchParams.get('from_artist') || '').trim();
+        const fromMoment = String(url.searchParams.get('event_moment') || '').trim();
+        const eventType = String(url.searchParams.get('event_type') || '').trim();
+
         const fromTitle = String(url.searchParams.get('from_title') || '').trim();
         const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 500);
         const tracks = searchSiDjKnowledge({ q, artist, genre, era, limit });
