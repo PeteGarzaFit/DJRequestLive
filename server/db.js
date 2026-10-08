@@ -40,6 +40,9 @@ export async function createDb() {
   const ddl = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8').replace(/^\s*--.*$/gm, '');
   for (const stmt of ddl.split(';').map((s) => s.trim()).filter(Boolean)) await pool.query(stmt);
   for (const stmt of [
+    'ALTER TABLE si_dj_learning_context ADD COLUMN planned_count BIGINT UNSIGNED NOT NULL DEFAULT 0',
+    'ALTER TABLE si_dj_learning_context ADD COLUMN request_count BIGINT UNSIGNED NOT NULL DEFAULT 0',
+    'ALTER TABLE si_dj_learning_context ADD COLUMN event_count BIGINT UNSIGNED NOT NULL DEFAULT 0',
     'ALTER TABLE users ADD COLUMN spotify_access_token TEXT NULL',
     'ALTER TABLE users ADD COLUMN spotify_refresh_token TEXT NULL',
     'ALTER TABLE users ADD COLUMN spotify_expires_at BIGINT NULL',
