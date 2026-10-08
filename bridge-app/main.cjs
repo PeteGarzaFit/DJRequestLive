@@ -9,180 +9,199 @@ const PROTOCOL = 'sidj-bridge';
 const PORT = 8765;
 const configDir = path.join(app.getPath('userData'));
 const configPath = path.join(configDir, 'config.json');
+let pendingProtocolUrl = null;
 
-function registerProtocol() {
-  try { app.setAsDefaultProtocolClient(PROTOCOL); } catch (e) { console.error('[Protocol registration]', e); }
-}
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
-function defaultConfig() {
-  return {
-    source: 'virtualdj-history',
-    virtualdjHistory: {
-      historyFile: path.join(os.homedir(), 'Library', 'Application Support', 'VirtualDJ', 'History', 'tracklist.txt')
-    },
-    rekordbox: { historyFile: '' }
-  };
-}
-
-function ensureConfig() {
-  fs.mkdirSync(configDir, { recursive: true });
-
-  if (!fs.existsSync(configPath)) {
-    fs.writeFileSync(configPath, JSON.stringify(defaultConfig(), null, 2));
-    return;
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  function registerProtocol() {
+    try { app.setAsDefaultProtocolClient(PROTOCOL); } catch (e) { console.error('[Protocol registration]', e); }
   }
 
-  try {
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    const actualVdjHistory = path.join(
-      os.homedir(),
-      'Library',
-      'Application Support',
-      'VirtualDJ',
-      'History',
-      'tracklist.txt'
-    );
-    const configuredHistory = config.virtualdjHistory?.historyFile;
-    const needsMigration =
-      config.source === 'virtualdj' ||
-      !!config.virtualdj ||
-      !configuredHistory ||
-      !fs.existsSync(configuredHistory);
-
-    if (needsMigration) {
-      const migrated = {
-        source: 'virtualdj-history',
-        virtualdjHistory: { historyFile: actualVdjHistory },
-        rekordbox: config.rekordbox || { historyFile: '' }
-      };
-      fs.writeFileSync(configPath, JSON.stringify(migrated, null, 2));
-    }
-  } catch {
-    fs.writeFileSync(configPath, JSON.stringify(defaultConfig(), null, 2));
-  }
-}
-
-function bridgeScript() {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'bridge', 'server.mjs')
-    : path.join(__dirname, '..', 'bridge', 'server.mjs');
-}
-
-function startBridge() {
-  if (bridge && !bridge.killed) return;
-
-  ensureConfig();
-  bridge = spawn(process.execPath, [bridgeScript()], {
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',
-      DJRL_BRIDGE_CONFIG: configPath,
-      PORT: String(PORT)
-    },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-
-  bridge.stdout.on('data', data => console.log('[Bridge]', data.toString().trim()));
-  bridge.stderr.on('data', data => console.error('[Bridge]', data.toString().trim()));
-  bridge.on('error', err => {
-    console.error('[Bridge process error]', err);
-    bridge = null;
-  });
-  bridge.on('exit', (code, signal) => {
-    console.log('[Bridge exited]', { code, signal });
-    bridge = null;
-  });
-}
-
-function stopBridge() {
-  if (bridge) {
-    bridge.kill();
-    bridge = null;
-  }
-}
-
-function createWindow() {
-  win = new BrowserWindow({
-    width: 900,
-    height: 620,
-    minWidth: 720,
-    minHeight: 520,
-    title: 'SI DJ Bridge',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  });
-  win.loadFile(path.join(__dirname, 'index.html'));
-  win.on('close', e => {
-    if (!app.isQuitting) {
-      e.preventDefault();
-      win.hide();
-    }
-  });
-}
-
-function createTray() {
-  tray = new Tray(nativeImage.createEmpty());
-  tray.setToolTip('SI DJ Bridge');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open SI DJ Bridge', click: () => { win.show(); win.focus(); } },
-    { label: 'Start Bridge', click: startBridge },
-    { label: 'Stop Bridge', click: stopBridge },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } }
-  ]));
-}
-
-ipcMain.handle('bridge:status', async () => {
-  try {
-    const r = await fetch('http://127.0.0.1:' + PORT + '/health');
-    return await r.json();
-  } catch {
-    return { connected: false, source: null, nowPlaying: null, error: 'Bridge offline' };
-  }
-});
-
-ipcMain.handle('bridge:start', () => {
-  startBridge();
-  return { ok: true };
-});
-
-ipcMain.handle('bridge:stop', () => {
-  stopBridge();
-  return { ok: true };
-});
-
-ipcMain.handle('bridge:open-config', () => {
-  ensureConfig();
-  return shell.openPath(configPath);
-});
-
-app.whenReady().then(() => {
-  registerProtocol();
-  ensureConfig();
-  startBridge();
-  createWindow();
-  createTray();
-});
-
-app.on('open-url', (event, url) => {
-  event.preventDefault();
-  if (url.startsWith(PROTOCOL + '://')) {
+  function handleProtocolUrl(url) {
+    if (!url || !url.startsWith(PROTOCOL + '://')) return;
+    pendingProtocolUrl = null;
     if (win) { win.show(); win.focus(); }
     startBridge();
   }
-});
 
-app.on('second-instance', (_event, commandLine) => {
-  if (win) { win.show(); win.focus(); }
-  if (commandLine.some((arg) => arg.startsWith(PROTOCOL + '://'))) startBridge();
-});
+  function defaultConfig() {
+    return {
+      source: 'virtualdj-history',
+      virtualdjHistory: {
+        historyFile: path.join(os.homedir(), 'Library', 'Application Support', 'VirtualDJ', 'History', 'tracklist.txt')
+      },
+      rekordbox: { historyFile: '' }
+    };
+  }
 
-app.on('before-quit', () => {
-  app.isQuitting = true;
-  stopBridge();
-});
+  function ensureConfig() {
+    fs.mkdirSync(configDir, { recursive: true });
 
-app.on('window-all-closed', e => e.preventDefault());
+    if (!fs.existsSync(configPath)) {
+      fs.writeFileSync(configPath, JSON.stringify(defaultConfig(), null, 2));
+      return;
+    }
+
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const actualVdjHistory = path.join(
+        os.homedir(),
+        'Library',
+        'Application Support',
+        'VirtualDJ',
+        'History',
+        'tracklist.txt'
+      );
+      const configuredHistory = config.virtualdjHistory?.historyFile;
+      const needsMigration =
+        config.source === 'virtualdj' ||
+        !!config.virtualdj ||
+        !configuredHistory ||
+        !fs.existsSync(configuredHistory);
+
+      if (needsMigration) {
+        const migrated = {
+          source: 'virtualdj-history',
+          virtualdjHistory: { historyFile: actualVdjHistory },
+          rekordbox: config.rekordbox || { historyFile: '' }
+        };
+        fs.writeFileSync(configPath, JSON.stringify(migrated, null, 2));
+      }
+    } catch {
+      fs.writeFileSync(configPath, JSON.stringify(defaultConfig(), null, 2));
+    }
+  }
+
+  function bridgeScript() {
+    return app.isPackaged
+      ? path.join(process.resourcesPath, 'bridge', 'server.mjs')
+      : path.join(__dirname, '..', 'bridge', 'server.mjs');
+  }
+
+  function startBridge() {
+    if (bridge && !bridge.killed) return;
+
+    ensureConfig();
+    bridge = spawn(process.execPath, [bridgeScript()], {
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        DJRL_BRIDGE_CONFIG: configPath,
+        PORT: String(PORT)
+      },
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    bridge.stdout.on('data', data => console.log('[Bridge]', data.toString().trim()));
+    bridge.stderr.on('data', data => console.error('[Bridge]', data.toString().trim()));
+    bridge.on('error', err => {
+      console.error('[Bridge process error]', err);
+      bridge = null;
+    });
+    bridge.on('exit', (code, signal) => {
+      console.log('[Bridge exited]', { code, signal });
+      bridge = null;
+    });
+  }
+
+  function stopBridge() {
+    if (bridge) {
+      bridge.kill();
+      bridge = null;
+    }
+  }
+
+  function createWindow() {
+    win = new BrowserWindow({
+      width: 900,
+      height: 620,
+      minWidth: 720,
+      minHeight: 520,
+      title: 'SI DJ Bridge',
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    });
+    win.loadFile(path.join(__dirname, 'index.html'));
+    win.on('close', e => {
+      if (!app.isQuitting) {
+        e.preventDefault();
+        win.hide();
+      }
+    });
+  }
+
+  function createTray() {
+    tray = new Tray(nativeImage.createEmpty());
+    tray.setToolTip('SI DJ Bridge');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Open SI DJ Bridge', click: () => { win.show(); win.focus(); } },
+      { label: 'Start Bridge', click: startBridge },
+      { label: 'Stop Bridge', click: stopBridge },
+      { type: 'separator' },
+      { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } }
+    ]));
+  }
+
+  ipcMain.handle('bridge:status', async () => {
+    try {
+      const r = await fetch('http://127.0.0.1:' + PORT + '/health');
+      return await r.json();
+    } catch {
+      return { connected: false, source: null, nowPlaying: null, error: 'Bridge offline' };
+    }
+  });
+
+  ipcMain.handle('bridge:start', () => {
+    startBridge();
+    return { ok: true };
+  });
+
+  ipcMain.handle('bridge:stop', () => {
+    stopBridge();
+    return { ok: true };
+  });
+
+  ipcMain.handle('bridge:open-config', () => {
+    ensureConfig();
+    return shell.openPath(configPath);
+  });
+
+  app.whenReady().then(() => {
+    registerProtocol();
+    ensureConfig();
+    startBridge();
+    createWindow();
+    createTray();
+
+    const launchUrl = process.argv.find(arg => arg.startsWith(PROTOCOL + '://'));
+    if (launchUrl) handleProtocolUrl(launchUrl);
+    if (pendingProtocolUrl) handleProtocolUrl(pendingProtocolUrl);
+  });
+
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    if (url.startsWith(PROTOCOL + '://')) {
+      if (app.isReady()) handleProtocolUrl(url);
+      else pendingProtocolUrl = url;
+    }
+  });
+
+  app.on('second-instance', (_event, commandLine) => {
+    if (win) { win.show(); win.focus(); }
+    const protocolUrl = commandLine.find(arg => arg.startsWith(PROTOCOL + '://'));
+    if (protocolUrl) handleProtocolUrl(protocolUrl);
+  });
+
+  app.on('before-quit', () => {
+    app.isQuitting = true;
+    stopBridge();
+  });
+
+  app.on('window-all-closed', e => e.preventDefault());
+}
