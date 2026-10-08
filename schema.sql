@@ -181,6 +181,9 @@ CREATE TABLE IF NOT EXISTS si_dj_play_history (
   title VARCHAR(500) NOT NULL DEFAULT '',
   source VARCHAR(60) NOT NULL DEFAULT 'bridge',
   raw_line VARCHAR(1000) NOT NULL DEFAULT '',
+  event_type VARCHAR(80) NOT NULL DEFAULT '',
+  event_moment VARCHAR(160) NOT NULL DEFAULT '',
+  event_key_context VARCHAR(160) NOT NULL DEFAULT '',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   UNIQUE KEY uq_si_dj_play_event (user_id, event_key),
@@ -240,4 +243,17 @@ CREATE TABLE IF NOT EXISTS si_dj_learning_transition_djs (
   FOREIGN KEY (from_track_id) REFERENCES si_dj_learning_tracks(id) ON DELETE CASCADE,
   FOREIGN KEY (to_track_id) REFERENCES si_dj_learning_tracks(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) CHARACTER SET utf8mb4;
+
+CREATE TABLE IF NOT EXISTS si_dj_learning_context (
+  track_id BIGINT UNSIGNED NOT NULL,
+  event_type VARCHAR(80) NOT NULL,
+  event_moment VARCHAR(160) NOT NULL DEFAULT '',
+  play_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  dj_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  last_played BIGINT NULL,
+  PRIMARY KEY (track_id,event_type,event_moment),
+  FOREIGN KEY (track_id) REFERENCES si_dj_learning_tracks(id) ON DELETE CASCADE,
+  INDEX idx_si_dj_context_type (event_type,play_count),
+  INDEX idx_si_dj_context_moment (event_type,event_moment,play_count)
 ) CHARACTER SET utf8mb4;
