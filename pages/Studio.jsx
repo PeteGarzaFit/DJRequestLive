@@ -32,6 +32,11 @@ function currentEventContext(playedAt) {
       ? ['Pre-Ceremony','Processional','Bride Entrance','Unity / Special Ceremony Song','Recessional','Cocktail','Dinner / Background','Grand Entrance','Bridal Party Entrance','First Dance','Father–Daughter Dance','Mother–Son Dance','Anniversary Dance','Open Dance Floor','Cake Cutting','Bouquet Toss','Garter / Alternative','Toasts / Speeches','Last Dance','Must Play','Do Not Play']
       : ['Arrival / Cocktail','Dinner / Background','Main Event','Must Play','Do Not Play','Last Songs'];
     const d = new Date(Number(playedAt) || Date.now());
+    if (plan.details?.eventDate) {
+      const eventDate = String(plan.details.eventDate);
+      const playedDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      if (eventDate !== playedDate) return { event_type: String(plan.eventType || '') };
+    }
     const mins = d.getHours() * 60 + d.getMinutes();
     const times = plan.timelineTimes || {};
     const candidates = moments.map(item => {
