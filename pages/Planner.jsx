@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
+import { songRows } from '../lib/songLibrary.js';
 
 const QUICK = [
   { title: 'PARTY', items: ['Party Hits','Sing-Alongs','Dance Floor','Group Dances','Current Hits'] },
@@ -7,6 +8,35 @@ const QUICK = [
   { title: 'WEDDING', items: ['First Dance','Father–Daughter','Mother–Son','Grand Entrance','Cake Cutting','Bouquet Toss','Last Dance','Anniversary Dance'] },
   { title: 'EVENTS', items: ['Birthday','Wedding','Corporate','School','Quinceañera','Bar / Club','Festival','Holiday'] },
 ];
+
+
+const BROWSE_GENRES = ['All','Country','Texas Country','Red Dirt','Pop','Hip-Hop','R&B','Latin','Norteño','Cumbia','Salsa','Bachata','Tejano','Conjunto','Regional Mexican','Dance','EDM','Disco','Funk','Rock','80s','90s','2000s'];
+
+function BrowseLibrary() {
+  const [genre, setGenre] = useState('All');
+  const filtered = songRows().filter((s) => {
+    if (genre === 'All') return true;
+    const hay = [s.genre, s.tags, s.era].join(' ').toLowerCase();
+    return hay.includes(genre.toLowerCase());
+  });
+  return (
+    <section className="panel">
+      <div className="planner-box-head">
+        <div><span className="eyebrow">DJ LIBRARY · BROWSE MODE</span><h2>Find a Song</h2><p className="hint">No event planning. No wedding formalities. Pick a genre and browse the library.</p></div>
+      </div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:18}}>
+        {BROWSE_GENRES.map((g) => <button key={g} className={genre === g ? 'btn btn-gold btn-sm' : 'btn btn-ghost btn-sm'} onClick={() => setGenre(g)}>{g}</button>)}
+      </div>
+      <div style={{display:'grid',gap:8,maxHeight:560,overflowY:'auto',paddingRight:4}}>
+        {filtered.map((s) => <div key={s.title+'|'+s.artist} style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'12px 14px',border:'1px solid rgba(255,255,255,.08)',borderRadius:12}}>
+          <div><b>{s.title}</b><span style={{display:'block'}}>{s.artist}</span><small>{s.genre} · {s.era}{s.bpm ? ' · '+s.bpm+' BPM' : ''}</small></div>
+          <small>{String(s.tags||'').split(',').slice(0,3).join(' · ')}</small>
+        </div>)}
+      </div>
+      {!filtered.length && <p className="hint">No library records match that genre yet.</p>}
+    </section>
+  );
+}
 
 const EXAMPLES = [
   '150-person wedding in Houston, mostly 30–50. Bride loves country and 2000s pop. Groom likes classic rock and hip-hop. Keep it fun, not too clubby.',
@@ -20,6 +50,7 @@ export default function Planner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [buildProgress, setBuildProgress] = useState(0);
+  const [mode, setMode] = useState('planner');
 
   useEffect(() => {
     if (!busy) { setBuildProgress(0); return; }
@@ -59,6 +90,11 @@ export default function Planner() {
         <p>Tell DJ Request Live what kind of event you’re working. The planner turns it into a DJ-ready music strategy, timeline, crowd profile and special moments.</p>
       </section>
 
+      <div style={{display:'flex',justifyContent:'center',gap:8,marginBottom:18}}>
+        <button className={mode === 'planner' ? 'btn btn-gold btn-sm' : 'btn btn-ghost btn-sm'} onClick={() => setMode('planner')}>AI Event Planner</button>
+        <button className={mode === 'browse' ? 'btn btn-gold btn-sm' : 'btn btn-ghost btn-sm'} onClick={() => setMode('browse')}>Browse Music Library</button>
+      </div>
+      {mode === 'browse' ? <BrowseLibrary /> : <>
       <section className="planner-box panel">
         <div className="planner-box-head">
           <div><h2>AI Event Music Planner</h2><p className="hint">Describe the event like you’d describe it to another DJ.</p></div>
@@ -95,6 +131,7 @@ export default function Planner() {
       </section>
 
       {plan && <PlanResult plan={plan} onRefine={run} busy={busy} />}
+      </>}
     </div>
   );
 }
