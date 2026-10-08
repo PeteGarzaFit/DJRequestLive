@@ -37,16 +37,16 @@ function splitInventoryLine(line) {
 function normalizeKey(value) {
   return String(value || '')
     .normalize('NFKD')
-    .replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/&/g, ' and ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
-    .replace(/\\s+/g, ' ');
+    .replace(/\s+/g, ' ');
 }
 
 function parseBpm(value) {
-  const m = String(value || '').match(/\\d+(?:\\.\\d+)?/);
+  const m = String(value || '').match(/\d+(?:\.\d+)?/);
   if (!m) return null;
   const n = Number(m[0]);
   return Number.isFinite(n) && n > 0 && n <= 400 ? n : null;
@@ -88,8 +88,8 @@ function parseArgs() {
 
 function parseSourceHeader(lines) {
   const header = lines.slice(0, 5).join('\\n');
-  const root = header.match(/# Scanned: ([^ (]+(?: [^ (]+)*?) \\(recursive, read-only\\)/i)?.[1] || '';
-  const aliases = Number(header.match(/Excludes (\\d+) Finder aliases/i)?.[1] || 0);
+  const root = header.match(/# Scanned: ([^ (]+(?: [^ (]+)*?) \(recursive, read-only\)/i)?.[1] || '';
+  const aliases = Number(header.match(/Excludes (\d+) Finder aliases/i)?.[1] || 0);
   return { root, aliases };
 }
 
@@ -97,7 +97,7 @@ async function main() {
   const { file, email, slug } = parseArgs();
   const raw = await fs.readFile(file);
   const text = raw.toString('utf8');
-  const lines = text.split(/\\r?\\n/);
+  const lines = text.split(/\r?\n/);
   const expectedHeader = 'ARTIST | TITLE | ALBUM | GENRE | BPM | YEAR | FILE TYPE | DURATION | FILE PATH | SOURCE';
   const headerIndex = lines.findIndex((line) => line.trim() === expectedHeader);
   if (headerIndex < 0) throw new Error('inventory header not found');
