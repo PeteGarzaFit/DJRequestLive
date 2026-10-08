@@ -89,3 +89,47 @@ CREATE TABLE IF NOT EXISTS si_dj_learning_context (
 );
 CREATE INDEX IF NOT EXISTS idx_si_dj_context_type ON si_dj_learning_context(event_type,play_count);
 CREATE INDEX IF NOT EXISTS idx_si_dj_context_moment ON si_dj_learning_context(event_type,event_moment,play_count);
+
+
+-- Permanent post-event SI DJ memory.
+CREATE TABLE IF NOT EXISTS si_dj_event_memory (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_key TEXT NOT NULL,
+  event_type TEXT NOT NULL DEFAULT '',
+  event_name TEXT NOT NULL DEFAULT '',
+  venue TEXT NOT NULL DEFAULT '',
+  event_date TEXT NULL,
+  closed_at INTEGER NULL,
+  planned_track_count INTEGER NOT NULL DEFAULT 0,
+  played_track_count INTEGER NOT NULL DEFAULT 0,
+  unique_played_count INTEGER NOT NULL DEFAULT 0,
+  planned_played_count INTEGER NOT NULL DEFAULT 0,
+  unplanned_played_count INTEGER NOT NULL DEFAULT 0,
+  completion_pct REAL NOT NULL DEFAULT 0,
+  repeat_request_count INTEGER NOT NULL DEFAULT 0,
+  summary_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (user_id,event_key)
+);
+CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_type_date ON si_dj_event_memory(event_type,event_date);
+CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_user_date ON si_dj_event_memory(user_id,event_date);
+
+CREATE TABLE IF NOT EXISTS si_dj_event_memory_tracks (
+  memory_id INTEGER NOT NULL REFERENCES si_dj_event_memory(id) ON DELETE CASCADE,
+  artist_key TEXT NOT NULL,
+  title_key TEXT NOT NULL,
+  artist TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  moments_json TEXT NOT NULL,
+  planned_count INTEGER NOT NULL DEFAULT 0,
+  played_count INTEGER NOT NULL DEFAULT 0,
+  request_count INTEGER NOT NULL DEFAULT 0,
+  first_played INTEGER NULL,
+  last_played INTEGER NULL,
+  PRIMARY KEY (memory_id,artist_key,title_key)
+);
+CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_track ON si_dj_event_memory_tracks(artist_key,title_key);
+CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_track_played ON si_dj_event_memory_tracks(played_count);
+CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_track_requests ON si_dj_event_memory_tracks(request_count);
