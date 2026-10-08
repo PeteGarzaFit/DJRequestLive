@@ -13,7 +13,7 @@ const key = (artist,title) => norm(artist)+'\\u0000'+norm(title);
 function clean(v){ return String(v||'').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim(); }
 function cells(row){ return [...row.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(m=>clean(m[1])); }
 function parseTables(html){
-  return [...String(html||'').matchAll(/<tr[^>]*>([\\s\\S]*?)<\\/tr>/gi)].map(m=>cells(m[1])).filter(r=>r.length>=4);
+  return [...String(html||'').matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map(m=>cells(m[1])).filter(r=>r.length>=4);
 }
 function era(year){
   const y=Number(year||0);
