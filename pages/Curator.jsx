@@ -79,7 +79,7 @@ export default function Curator(){
     <div className="wrap wide">
       <div className="shead" style={{marginBottom:14}}>
         <Link to="/studio" className="brand" style={{textDecoration:'none',color:'inherit'}}><Mark size={28} badge/>DJ Request Live</Link>
-        <div className="shead-r"><Link className="mini" to="/intelligence">SI DJ</Link><Link className="mini" to="/studio">Studio</Link></div>
+        <div className="shead-r"><Link className="mini" to="/event">DJ Event Mode</Link><Link className="mini" to="/intelligence">SI DJ</Link><Link className="mini" to="/studio">Studio</Link></div>
       </div>
 
       <section className="panel" style={{marginBottom:16}}>
@@ -93,7 +93,7 @@ export default function Curator(){
         </div>
         <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) auto',gap:10,marginTop:12}}>
           <input className="input" value={name} onChange={e=>setName(e.target.value)} placeholder={eventType==='Wedding'?'Couple / event name':'Host / event name'} />
-          <button className="btn btn-gold" onClick={save}>{saved?'Saved ✓':'Save Plan'}</button>
+          <div style={{display:"flex",gap:8}}><button className="btn btn-ghost" onClick={()=>window.location.assign("/event")}>DJ Event Mode</button><button className="btn btn-gold" onClick={save}>{saved?'Saved ✓':'Save Plan'}</button></div>
         </div>
         <div style={{display:'flex',gap:5,overflowX:'auto',marginTop:14,paddingBottom:2}}>
           {tabs.map(t=><button key={t} className={tab===t?'btn btn-gold btn-sm':'btn btn-ghost btn-sm'} onClick={()=>setTab(t)}>{t}</button>)}
