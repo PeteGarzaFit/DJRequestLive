@@ -701,6 +701,24 @@ ${JSON.stringify(library)}`;
           ]));
         }
 
+
+        let eventMemoryMap = new Map();
+        if (eventType) {
+          const memoryRows = await db.all(
+            `SELECT t.artist,t.title,SUM(t.played_count) AS memory_play_count,COUNT(DISTINCT m.id) AS memory_event_count,SUM(t.request_count) AS memory_request_count
+             FROM si_dj_event_memory_tracks t
+             JOIN si_dj_event_memory m ON m.id = t.memory_id
+             WHERE m.user_id = ? AND m.event_type = ? AND (? = '' OR t.moments_json LIKE ?)
+             GROUP BY t.artist,t.title
+             ORDER BY memory_play_count DESC,memory_request_count DESC
+             LIMIT 1000`,
+            [u.id,eventType,fromMoment,'%' + fromMoment + '%']
+          );
+          eventMemoryMap = new Map(memoryRows.map((x) => [
+            normalizeLibraryQuery(x.artist) + '\u0000' + normalizeLibraryQuery(x.title), x
+          ]));
+        }
+
         const enriched = tracks.map((track) => {
           const key = normalizeLibraryQuery(track.artist) + '\\u0000' + normalizeLibraryQuery(track.title);
           const live = learnedMap.get(key);
@@ -711,6 +729,10 @@ ${JSON.stringify(library)}`;
           const context = contextMap.get(key);
           const contextPlayCount = Number(context?.play_count || 0);
           const contextDjCount = Number(context?.dj_count || 0);
+          const eventMemory = eventMemoryMap.get(key);
+          const eventMemoryPlayCount = Number(eventMemory?.memory_play_count || 0);
+          const eventMemoryEventCount = Number(eventMemory?.memory_event_count || 0);
+          const eventMemoryRequestCount = Number(eventMemory?.memory_request_count || 0);
           return {
             ...track,
             live_play_count: playCount,
@@ -722,7 +744,11 @@ ${JSON.stringify(library)}`;
             live_transition_score: Math.min(35, Math.log1p(transitionCount) * 10 + Math.log1p(Number(transition?.dj_count || 0)) * 6),
             event_play_count: contextPlayCount,
             event_dj_count: contextDjCount,
-            event_learning_score: Math.min(45, Math.log1p(contextPlayCount) * 7 + Math.log1p(contextDjCount) * 8)
+            event_learning_score: Math.min(45, Math.log1p(contextPlayCount) * 7 + Math.log1p(contextDjCount) * 8),
+            event_memory_play_count: eventMemoryPlayCount,
+            event_memory_event_count: eventMemoryEventCount,
+            event_memory_request_count: eventMemoryRequestCount,
+            event_memory_score: Math.min(50, Math.log1p(eventMemoryPlayCount) * 10 + Math.log1p(eventMemoryEventCount) * 7 + Math.log1p(eventMemoryRequestCount) * 5)
           };
         });
         return send(res, 200, { knowledge: { ...siDjKnowledgeSummary(), live_learning: true }, tracks: enriched }), true;
