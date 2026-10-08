@@ -109,6 +109,7 @@ function scoreSong(s, filters, now){
   if (s.live_learning_score) score += Math.min(20, Number(s.live_learning_score || 0));
   if (s.live_transition_score) score += Math.min(30, Number(s.live_transition_score || 0));
   if (s.event_learning_score) score += Math.min(35, Number(s.event_learning_score || 0));
+  if (s.event_memory_score) score += Math.min(40, Number(s.event_memory_score || 0));
   if (now?.title && s.title.toLowerCase() === String(now.title).toLowerCase()) score -= 100;
   return score;
 }
