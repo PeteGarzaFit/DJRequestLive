@@ -59,6 +59,8 @@ function SIDJCommandCenter({ reqs }) {
   const [intel, setIntel] = useState(null);
   const [bridge, setBridge] = useState({ connected: false, source: null, nowPlaying: null, error: 'Checking SI DJ Bridge…' });
   const [busy, setBusy] = useState(false);
+  const [musicIntel, setMusicIntel] = useState(null);
+  const [musicIntelBusy, setMusicIntelBusy] = useState(true);
   const lastSig = useRef('');
 
   const loadBridge = useCallback(async () => {
@@ -77,6 +79,15 @@ function SIDJCommandCenter({ reqs }) {
     return () => clearInterval(t);
   }, [loadBridge]);
 
+  useEffect(() => {
+    let alive = true;
+    api.musicIntelligence()
+      .then((data) => { if (alive) setMusicIntel(data); })
+      .catch(() => { if (alive) setMusicIntel({ available: false, lanes: [], subgenres: [] }); })
+      .finally(() => { if (alive) setMusicIntelBusy(false); });
+    return () => { alive = false; };
+  }, []);
+
   const analyze = useCallback(async () => {
     const active = reqs.filter((r) => r.status !== 'declined');
     if (!active.length && !bridge.nowPlaying) { setIntel(null); return; }
@@ -94,6 +105,16 @@ function SIDJCommandCenter({ reqs }) {
         'DJ final say: never treat a request, tip, or recommendation as an automatic play command.',
         'Use the current track as the transition anchor. Consider genre momentum, BPM/key compatibility, cross-generational fit, energy, repeat requests, tips, and useful transitions.',
         'CURRENT DJ SOFTWARE TRACK:', liveTrack,
+        'CURRENT MUSIC INTELLIGENCE SNAPSHOT:',
+        musicIntel?.available
+          ? JSON.stringify((musicIntel.lanes || []).map((lane) => ({
+              lane: lane.label,
+              status: lane.status,
+              items: (lane.items || []).slice(0, 5).map((x) => ({
+                rank: x.rank, title: x.title, artist: x.artist, chart: x.chart, position: x.position, trend: x.trend
+              }))
+            })))
+          : 'not available for this session',
         'LIVE REQUESTS:', requestText || 'none',
         'RECENT PLAYED REQUESTS:', played || 'none',
         'Return the strongest useful next-song options first.'
@@ -120,7 +141,7 @@ function SIDJCommandCenter({ reqs }) {
     } finally {
       setBusy(false);
     }
-  }, [reqs, bridge.nowPlaying]);
+  }, [reqs, bridge.nowPlaying, musicIntel]);
 
   useEffect(() => {
     const sig = [
@@ -167,6 +188,18 @@ function SIDJCommandCenter({ reqs }) {
       <div className="sidj-section">
         <div className="eyebrow">TOP REQUEST SIGNALS</div>
         {intel.topRequests.map((r) => <div className="sidj-row" key={r.id}><div><strong>{r.song}</strong>{r.artist && <span>{r.artist}</span>}</div><b>{'$'}{Number(r.tip||0).toFixed(0)}</b></div>)}
+      </div>
+      <div className="sidj-section">
+        <div className="eyebrow">MUSIC INTELLIGENCE</div>
+        {musicIntelBusy ? <p className="hint">Pulling the latest national, Texas, regional Mexican, Latin and club music data…</p> :
+          musicIntel?.available ? <>
+            <div className="sidj-grid">
+              {(musicIntel.lanes || []).filter((lane) => lane.items?.length).slice(0, 6).map((lane) =>
+                <div className="sidj-card" key={lane.key}><b>{lane.label}</b><strong>{lane.items[0].title}</strong><span>{lane.items[0].artist}{lane.items[0].position ? ' · #' + lane.items[0].position : ''}</span></div>
+              )}
+            </div>
+            <p className="hint" style={{ marginTop: 8 }}>Fresh snapshot loaded for this DJ session · includes Billboard, Texas Country/Red Dirt, Tejano/Conjunto, Regional Mexican, Latin, hip-hop, dance and party lanes.</p>
+          </> : <p className="hint">Music chart snapshot unavailable right now. SI DJ will continue using live Bridge, request and curated-library signals.</p>}
       </div>
       <div className="sidj-section">
         <div className="eyebrow">WHAT SHOULD I CONSIDER NEXT?</div>
