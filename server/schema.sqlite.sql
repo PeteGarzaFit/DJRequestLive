@@ -64,7 +64,21 @@ CREATE INDEX IF NOT EXISTS idx_library_year ON library_tracks(user_id, year);
 CREATE INDEX IF NOT EXISTS idx_library_file_type ON library_tracks(user_id, file_type);
 CREATE INDEX IF NOT EXISTS idx_library_scan ON library_tracks(user_id, scan_id);
 
-CREATE TABLE IF NOT EXISTS si_dj_play_history (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, event_key TEXT NOT NULL, played_at INTEGER NOT NULL, artist TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT 'bridge', raw_line TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, UNIQUE (user_id, event_key));
+CREATE TABLE IF NOT EXISTS si_dj_play_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  event_key TEXT NOT NULL,
+  played_at INTEGER NOT NULL,
+  artist TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT 'bridge',
+  raw_line TEXT NOT NULL DEFAULT '',
+  event_type TEXT NOT NULL DEFAULT '',
+  event_moment TEXT NOT NULL DEFAULT '',
+  event_key_context TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  UNIQUE (user_id, event_key)
+);
 
 CREATE INDEX IF NOT EXISTS idx_si_dj_play_user_time ON si_dj_play_history(user_id, played_at);
 CREATE INDEX IF NOT EXISTS idx_si_dj_play_track ON si_dj_play_history(artist, title);
