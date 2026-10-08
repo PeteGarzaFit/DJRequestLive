@@ -4,7 +4,7 @@ import path from 'node:path';
 const BILLBOARD_URL = 'https://raw.githubusercontent.com/mhollingshead/billboard-hot-100/main/all.json';
 const T3R_URL = 'https://www.texasregionalradio.com/Top100.asp';
 const TIRC_URL = 'https://tirc.online/charts/tirc';
-const OUT = path.resolve('data/si-dj-knowledge.json');
+const OUT_DIR = path.resolve('data/si-dj-knowledge');
 const AUDIO_URL = 'https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-09-14/audio_features.csv';
 
 const norm = (v) => String(v || '').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
@@ -174,17 +174,29 @@ const tracks=[...map.values()]
   .filter(s=>s.artist && s.title)
   .sort((a,b)=>b.popularity-a.popularity);
 
-await fs.mkdir(path.dirname(OUT),{recursive:true});
-await fs.writeFile(OUT,JSON.stringify({
+await fs.rm(OUT_DIR,{recursive:true,force:true});
+await fs.mkdir(OUT_DIR,{recursive:true});
+const generated_at=new Date().toISOString();
+const sources={
+  billboard_hot_100:{url:BILLBOARD_URL,coverage:'1958-present',kind:'historical_chart_signal'},
+  billboard_spotify_audio_features:{url:AUDIO_URL,coverage:'through 2021',kind:'audio_features_and_genre'},
+  texas_regional_radio_report:{url:T3R_URL,coverage:'current_public_chart',kind:'texas_radio_signal'},
+  texas_internet_radio_chart:{url:TIRC_URL,coverage:'current_public_chart',kind:'texas_internet_radio_signal'}
+};
+const chunkSize=750;
+const chunks=[];
+for(let i=0;i<tracks.length;i+=chunkSize){
+  const name='part-'+String(Math.floor(i/chunkSize)+1).padStart(4,'0')+'.json';
+  await fs.writeFile(path.join(OUT_DIR,name),JSON.stringify(tracks.slice(i,i+chunkSize)));
+  chunks.push(name);
+}
+await fs.writeFile(path.join(OUT_DIR,'manifest.json'),JSON.stringify({
   version:1,
-  generated_at:new Date().toISOString(),
-  sources:{
-    billboard_hot_100:{url:BILLBOARD_URL,coverage:'1958-present',kind:'historical_chart_signal'},
-    billboard_spotify_audio_features:{url:AUDIO_URL,coverage:'through 2021',kind:'audio_features_and_genre'},
-    texas_regional_radio_report:{url:T3R_URL,coverage:'current_public_chart',kind:'texas_radio_signal'},
-    texas_internet_radio_chart:{url:TIRC_URL,coverage:'current_public_chart',kind:'texas_internet_radio_signal'}
-  },
-  methodology:'Aggregated chart signals for recommendation ranking. The source charts remain the authoritative sources; SI DJ stores normalized music identity and derived ranking signals rather than reproducing chart presentation.',
-  tracks
+  generated_at,
+  track_count:tracks.length,
+  chunk_size:chunkSize,
+  chunks,
+  sources,
+  methodology:'Aggregated chart signals for recommendation ranking. The source charts remain authoritative; SI DJ stores normalized music identity and derived ranking signals rather than reproducing chart presentation.'
 },null,2));
-console.log('SI DJ knowledge complete:',tracks.length,'tracks ->',OUT);
+console.log('SI DJ knowledge complete:',tracks.length,'tracks in',chunks.length,'chunks ->',OUT_DIR);
