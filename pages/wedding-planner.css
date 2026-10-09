@@ -83,6 +83,14 @@
 .wp-button { min-height: 42px; border-radius: 5px; padding: 9px 13px; border: 1px solid transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: background .15s ease, transform .15s ease; }
 .wp-button:hover:not(:disabled) { transform: translateY(-1px); }
 .wp-button:disabled { opacity: .42; cursor: not-allowed; }
+.wp-action-feedback { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 55px; }
+.wp-action-feedback.done { color: #31563e; }
+.wp-action-feedback.error { color: #9a4d37; }
+.wp-action-feedback.compact { min-width: 0; }
+.wp-spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: wp-spin .7s linear infinite; }
+.wp-icon-button .wp-spinner { width: 14px; height: 14px; }
+.wp-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@keyframes wp-spin { to { transform: rotate(360deg); } }
 .wp-button-dark { background: var(--wp-sage); color: white; }
 .wp-button-dark:hover:not(:disabled) { background: #31483a; }
 .wp-button-light { border-color: #d6ded6; background: #f7faf6; color: var(--wp-sage); }

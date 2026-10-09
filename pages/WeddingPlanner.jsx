@@ -128,6 +128,34 @@ function CheckLine({ checked, onChange, children }) {
   return <label className="wp-check"><input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked)} /><span>{children}</span></label>;
 }
 
+function ActionButton({ children, onClick, disabled = false, ...props }) {
+  const compact = String(props.className || '').includes('wp-icon-button');
+  const [phase, setPhase] = useState('idle');
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  async function run(event) {
+    if (disabled || phase === 'working') return;
+    clearTimeout(timer.current);
+    setPhase('working');
+    try {
+      await new Promise(resolve => requestAnimationFrame(() => resolve()));
+      const succeeded = await onClick?.(event);
+      setPhase(succeeded === false ? 'error' : 'done');
+      timer.current = setTimeout(() => setPhase('idle'), succeeded === false ? 2200 : 1250);
+    } catch (error) {
+      setPhase('error');
+      timer.current = setTimeout(() => setPhase('idle'), 2200);
+    }
+  }
+  return <button {...props} disabled={disabled || phase === 'working'} onClick={run} aria-live="polite" aria-busy={phase === 'working'}>
+    {phase === 'idle' ? children : <span className={`wp-action-feedback ${compact ? 'compact' : ''} ${phase}`}>
+      {phase === 'working' ? <><i className="wp-spinner" aria-hidden="true" />{!compact && <span>Working…</span>}<span className="wp-sr-only">Working</span></> :
+        phase === 'done' ? <><span aria-hidden="true">✓</span>{!compact && <span>Done</span>}<span className="wp-sr-only">Done</span></> :
+          <><span aria-hidden="true">!</span>{!compact && <span>Try again</span>}<span className="wp-sr-only">Action failed</span></>}
+    </span>}
+  </button>;
+}
+
 export default function WeddingPlanner({ shared = false }) {
   const { token = '' } = useParams();
   const navigate = useNavigate();
@@ -262,7 +290,8 @@ export default function WeddingPlanner({ shared = false }) {
       setPlanId(created.id); setShareToken(created.share_token); setPlan(created.plan);
       setPlans(p => [{ id: created.id, share_token: created.share_token, plan: created.plan, updated_at: created.updated_at }, ...p]);
       setDirty(false); setReady(true); setStatus('Saved');
-    } catch (e) { toast(e.code === 'not_signed_in' ? 'Sign in to create a wedding plan.' : 'Could not create a wedding plan.'); }
+    } catch (e) { toast(e.code === 'not_signed_in' ? 'Sign in to create a wedding plan.' : 'Could not create a wedding plan.'); return false; }
+    return true;
   }
   async function choosePlan(id) {
     if (String(id) === String(planId)) return;
@@ -275,8 +304,10 @@ export default function WeddingPlanner({ shared = false }) {
     finally { setReady(true); }
   }
   async function share() {
-    if (await copyText(shareUrl)) toast('Wedding link copied.');
+    const copied = await copyText(shareUrl);
+    if (copied) toast('Wedding link copied.');
     else toast('Could not copy the link. Select and copy it below.');
+    return copied;
   }
   function addSuggestion() {
     if (!nonempty(suggestion.text)) return;
@@ -371,11 +402,11 @@ export default function WeddingPlanner({ shared = false }) {
           <select id="wp-saved-plans" value={planId || ''} onChange={e => choosePlan(e.target.value)}>
             {plans.map(x => <option key={x.id} value={x.id}>{x.plan?.title || `Wedding ${x.id}`}</option>)}
           </select>
-          <button type="button" className="wp-button wp-button-light" onClick={createAnother}>New wedding</button>
+          <ActionButton type="button" className="wp-button wp-button-light" onClick={createAnother}>New wedding</ActionButton>
         </div>
         <div className="wp-share-action">
           <div><b>Invite the couple and wedding party</b><small>Anyone with this private link can add details and song choices.</small></div>
-          <button type="button" className="wp-button wp-button-dark" onClick={share}>Copy couple link</button>
+          <ActionButton type="button" className="wp-button wp-button-dark" onClick={share}>Copy couple link</ActionButton>
         </div>
         <div className="wp-link-copy"><label htmlFor="wp-share-link">Private planning link</label><input id="wp-share-link" readOnly value={shareLink} onFocus={e => e.target.select()} /></div>
       </section>}
@@ -386,7 +417,7 @@ export default function WeddingPlanner({ shared = false }) {
         <Field label="Your name" value={plan.collaboratorName || ''} onChange={v => editPlan(p => ({ ...p, collaboratorName: v }))} />
       </section>}
 
-      {notice && <div className="wp-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Dismiss message">×</button></div>}
+      {notice && <div className="wp-notice" role="status"><span>{notice}</span><ActionButton type="button" onClick={() => setNotice('')} aria-label="Dismiss message">×</ActionButton></div>}
       {status.startsWith('Could not save') && <div className="wp-error" role="alert">{status}</div>}
 
       <div className="wp-layout">
@@ -446,16 +477,16 @@ export default function WeddingPlanner({ shared = false }) {
             const list = plan[section] || { songs: [], none: false };
             return <section className="wp-card" key={section}>
               <div className="wp-section-head"><span className="wp-section-index">{isMust ? 'E' : 'F'}</span><div><h2>{isMust ? 'Must-play songs' : 'Do-not-play songs'}</h2><p>{isMust ? 'Songs special to the couple, family, or friends. These belong in the open-dance portion.' : 'Songs that should never be played, even if a guest requests them.'}</p></div></div>
-              {(list.songs || []).map((song, i) => <div className="wp-list-song" key={`${songKey(song)}-${i}`}><span>{song.title}</span><span>{song.artist}</span><button type="button" className="wp-icon-button wedding-no-print" aria-label={`Remove ${song.title}`} onClick={() => removeListSong(section, i)}>×</button></div>)}
+              {(list.songs || []).map((song, i) => <div className="wp-list-song" key={`${songKey(song)}-${i}`}><span>{song.title}</span><span>{song.artist}</span><ActionButton type="button" className="wp-icon-button wedding-no-print" aria-label={`Remove ${song.title}`} onClick={() => removeListSong(section, i)}>×</ActionButton></div>)}
               {!list.songs?.length && <p className="wp-empty-line">{isMust ? 'No must-play songs added yet.' : 'No restricted songs added yet.'}</p>}
-              <div className="wp-add-song wedding-no-print"><input className="wp-input" aria-label={`${isMust ? 'Must-play' : 'Do-not-play'} song title`} placeholder="Song title" value={newListSong[section].title} onChange={e => setNewListSong(p => ({ ...p, [section]: { ...p[section], title: e.target.value } }))} /><input className="wp-input" aria-label="Artist" placeholder="Artist" value={newListSong[section].artist} onChange={e => setNewListSong(p => ({ ...p, [section]: { ...p[section], artist: e.target.value } }))} /><button type="button" className="wp-button wp-button-light" onClick={() => addListSong(section)}>Add song</button></div>
+              <div className="wp-add-song wedding-no-print"><input className="wp-input" aria-label={`${isMust ? 'Must-play' : 'Do-not-play'} song title`} placeholder="Song title" value={newListSong[section].title} onChange={e => setNewListSong(p => ({ ...p, [section]: { ...p[section], title: e.target.value } }))} /><input className="wp-input" aria-label="Artist" placeholder="Artist" value={newListSong[section].artist} onChange={e => setNewListSong(p => ({ ...p, [section]: { ...p[section], artist: e.target.value } }))} /><ActionButton type="button" className="wp-button wp-button-light" onClick={() => addListSong(section)}>Add song</ActionButton></div>
               <CheckLine checked={list.none} onChange={v => markListComplete(section, v)}>{isMust ? 'No must-play songs for this wedding' : 'No do-not-play songs for this wedding'}</CheckLine>
             </section>;
           })}
 
           <section className="wp-card">
             <div className="wp-section-head"><span className="wp-section-index">G</span><div><h2>Music styles</h2><p>Choose like, dislike, or no preference for every style so the DJ knows what fits.</p></div></div>
-            <div className="wp-style-list">{MUSIC_STYLES.map(style => <div className="wp-style-row" key={style}><span>{style}</span><div role="group" aria-label={`${style} preference`} className="wp-choice-group">{[['like','Like'],['dislike','Dislike'],['no-preference','No preference']].map(([value, label]) => <button key={value} type="button" className={plan.styles?.[style] === value ? 'selected' : ''} aria-pressed={plan.styles?.[style] === value} onClick={() => patchSection('styles', style, value)}>{label}</button>)}</div></div>)}</div>
+            <div className="wp-style-list">{MUSIC_STYLES.map(style => <div className="wp-style-row" key={style}><span>{style}</span><div role="group" aria-label={`${style} preference`} className="wp-choice-group">{[['like','Like'],['dislike','Dislike'],['no-preference','No preference']].map(([value, label]) => <ActionButton key={value} type="button" className={plan.styles?.[style] === value ? 'selected' : ''} aria-pressed={plan.styles?.[style] === value} onClick={() => patchSection('styles', style, value)}>{label}</ActionButton>)}</div></div>)}</div>
           </section>
 
           <section className="wp-card">
@@ -466,7 +497,7 @@ export default function WeddingPlanner({ shared = false }) {
             </div>
             <CheckLine checked={artistChoices.reviewed} onChange={v => patchSection('artists', 'reviewed', v)}>No additional artist preferences</CheckLine>
             <h3 className="wp-subhead">DJ behavior</h3>
-            <div className="wp-behavior-list">{DJ_BEHAVIORS.map(behavior => <div className="wp-behavior-row" key={behavior}><span>{behavior}</span><div role="group" aria-label={`${behavior} preference`} className="wp-choice-group"><button type="button" className={plan.behaviors?.[behavior] === 'do' ? 'selected' : ''} aria-pressed={plan.behaviors?.[behavior] === 'do'} onClick={() => patchSection('behaviors', behavior, 'do')}>Do it</button><button type="button" className={plan.behaviors?.[behavior] === 'dont' ? 'selected' : ''} aria-pressed={plan.behaviors?.[behavior] === 'dont'} onClick={() => patchSection('behaviors', behavior, 'dont')}>Don’t</button><button type="button" className={plan.behaviors?.[behavior] === 'no-preference' ? 'selected' : ''} aria-pressed={plan.behaviors?.[behavior] === 'no-preference'} onClick={() => patchSection('behaviors', behavior, 'no-preference')}>No preference</button></div></div>)}</div>
+            <div className="wp-behavior-list">{DJ_BEHAVIORS.map(behavior => <div className="wp-behavior-row" key={behavior}><span>{behavior}</span><div role="group" aria-label={`${behavior} preference`} className="wp-choice-group"><ActionButton type="button" className={plan.behaviors?.[behavior] === 'do' ? 'selected' : ''} aria-pressed={plan.behaviors?.[behavior] === 'do'} onClick={() => patchSection('behaviors', behavior, 'do')}>Do it</ActionButton><ActionButton type="button" className={plan.behaviors?.[behavior] === 'dont' ? 'selected' : ''} aria-pressed={plan.behaviors?.[behavior] === 'dont'} onClick={() => patchSection('behaviors', behavior, 'dont')}>Don’t</ActionButton><ActionButton type="button" className={plan.behaviors?.[behavior] === 'no-preference' ? 'selected' : ''} aria-pressed={plan.behaviors?.[behavior] === 'no-preference'} onClick={() => patchSection('behaviors', behavior, 'no-preference')}>No preference</ActionButton></div></div>)}</div>
           </section>
 
           <section className="wp-card">
@@ -477,22 +508,22 @@ export default function WeddingPlanner({ shared = false }) {
 
           <section className="wp-card wp-open-dance">
             <div className="wp-section-head"><span className="wp-section-index">J</span><div><h2>Open dance: start with 40 SI DJ picks</h2><p>A useful mix from DJ Request Live’s highest dance-floor, sing-along, and cross-generation scores. Keep the songs that fit, cross off the rest, then add family favorites.</p></div></div>
-            <div className="wp-starter-tools wedding-no-print"><span><b>{(plan.openDance?.starters || []).filter(s => s.selected && !s.removed && !doNotPlayKeys.has(songKey(s))).length}</b> of 40 starters kept</span><div><button type="button" className="wp-button wp-button-light" onClick={suggestStarterMix}>Suggest 12 for this couple</button><button type="button" className="wp-button wp-button-light" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, none: false, starters: p.openDance.starters.map(s => ({ ...s, selected: !s.removed && !doNotPlayKeys.has(songKey(s)) })) } }))}>Keep all 40</button><button type="button" className="wp-button wp-button-quiet" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, starters: weddingStarters() } }))}>Restore 40</button></div></div>
+            <div className="wp-starter-tools wedding-no-print"><span><b>{(plan.openDance?.starters || []).filter(s => s.selected && !s.removed && !doNotPlayKeys.has(songKey(s))).length}</b> of 40 starters kept</span><div><ActionButton type="button" className="wp-button wp-button-light" onClick={suggestStarterMix}>Suggest 12 for this couple</ActionButton><ActionButton type="button" className="wp-button wp-button-light" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, none: false, starters: p.openDance.starters.map(s => ({ ...s, selected: !s.removed && !doNotPlayKeys.has(songKey(s)) })) } }))}>Keep all 40</ActionButton><ActionButton type="button" className="wp-button wp-button-quiet" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, starters: weddingStarters() } }))}>Restore 40</ActionButton></div></div>
             {notice && <p className="wp-help wedding-no-print">{notice}</p>}
             <div className="wp-starter-list">{(plan.openDance?.starters || []).map((song, originalIndex) => ({ song, originalIndex })).filter(({ song }) => !song.removed).map(({ song, originalIndex: i }) => <div className="wp-starter-row" key={`${songKey(song)}-${i}`}>
               <label className="wp-keep"><input type="checkbox" checked={!!song.selected && !doNotPlayKeys.has(songKey(song))} disabled={doNotPlayKeys.has(songKey(song))} onChange={e => editPlan(p => ({ ...p, openDance: { ...p.openDance, none: false, starters: p.openDance.starters.map((x, j) => j === i ? { ...x, selected: e.target.checked } : x) } }))} /><span>{doNotPlayKeys.has(songKey(song)) ? 'Do not play' : 'Keep'}</span></label>
               <div><b>{song.title}</b><span>{song.artist}</span></div><small>{song.genre || 'Open dance'}</small>
-              <button type="button" className="wp-icon-button wedding-no-print" aria-label={`Cross off ${song.title}`} title="Cross off this starter" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, starters: p.openDance.starters.map((x, j) => j === i ? { ...x, selected: false, removed: true } : x) } }))}>×</button>
+              <ActionButton type="button" className="wp-icon-button wedding-no-print" aria-label={`Cross off ${song.title}`} title="Cross off this starter" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, starters: p.openDance.starters.map((x, j) => j === i ? { ...x, selected: false, removed: true } : x) } }))}>×</ActionButton>
             </div>)}</div>
-            <div className="wp-add-custom wedding-no-print"><div className="wp-grid wp-grid-2"><Field label="Add another song" value={newTrack.title} onChange={v => setNewTrack(p => ({ ...p, title: v }))} placeholder="Song title" /><Field label="Artist" value={newTrack.artist} onChange={v => setNewTrack(p => ({ ...p, artist: v }))} placeholder="Artist name" /></div><button type="button" className="wp-button wp-button-dark" onClick={() => { if (newTrack.title.trim() && newTrack.artist.trim()) { addOpenDanceSong(newTrack); setNewTrack({ title: '', artist: '' }); } }}>Add to open dance</button></div>
-            <div className="wp-library-search wedding-no-print"><Field label="Find a song in the DJ Request Live song guide" value={trackQuery} onChange={setTrackQuery} placeholder="Search title, artist, or style" />{filteredTracks.length > 0 && <div className="wp-search-results">{filteredTracks.map(song => <button type="button" key={songKey(song)} onClick={() => addOpenDanceSong(song)}><span><b>{song.title}</b><small>{song.artist} · {song.genre}</small></span><strong>Add</strong></button>)}</div>}</div>
+            <div className="wp-add-custom wedding-no-print"><div className="wp-grid wp-grid-2"><Field label="Add another song" value={newTrack.title} onChange={v => setNewTrack(p => ({ ...p, title: v }))} placeholder="Song title" /><Field label="Artist" value={newTrack.artist} onChange={v => setNewTrack(p => ({ ...p, artist: v }))} placeholder="Artist name" /></div><ActionButton type="button" className="wp-button wp-button-dark" onClick={() => { if (newTrack.title.trim() && newTrack.artist.trim()) { addOpenDanceSong(newTrack); setNewTrack({ title: '', artist: '' }); } }}>Add to open dance</ActionButton></div>
+            <div className="wp-library-search wedding-no-print"><Field label="Find a song in the DJ Request Live song guide" value={trackQuery} onChange={setTrackQuery} placeholder="Search title, artist, or style" />{filteredTracks.length > 0 && <div className="wp-search-results">{filteredTracks.map(song => <ActionButton type="button" key={songKey(song)} onClick={() => addOpenDanceSong(song)}><span><b>{song.title}</b><small>{song.artist} · {song.genre}</small></span><strong>Add</strong></ActionButton>)}</div>}</div>
             <CheckLine checked={!!plan.openDance?.none} onChange={v => markListComplete('openDance', v)}>No preselected open-dance songs; let the DJ read the room</CheckLine>
-            {(plan.openDance?.custom || []).length > 0 && <div className="wp-custom-list">{plan.openDance.custom.map((song, i) => <div className="wp-list-song" key={`${songKey(song)}-${i}`}><span>{song.title}</span><span>{song.artist}</span><button type="button" className="wp-icon-button wedding-no-print" aria-label={`Remove ${song.title}`} onClick={() => removeOpenDanceSong(i)}>×</button></div>)}</div>}
+            {(plan.openDance?.custom || []).length > 0 && <div className="wp-custom-list">{plan.openDance.custom.map((song, i) => <div className="wp-list-song" key={`${songKey(song)}-${i}`}><span>{song.title}</span><span>{song.artist}</span><ActionButton type="button" className="wp-icon-button wedding-no-print" aria-label={`Remove ${song.title}`} onClick={() => removeOpenDanceSong(i)}>×</ActionButton></div>)}</div>}
           </section>
 
           <section className="wp-card">
             <div className="wp-section-head"><span className="wp-section-index">K</span><div><h2>Notes from family and the wedding party</h2><p>Share a song, a pronunciation note, or a detail the DJ should know. The contributor’s name is saved with the note.</p></div></div>
-            <div className="wp-add-suggestion wedding-no-print"><select className="wp-input" aria-label="Suggestion section" value={suggestion.section} onChange={e => setSuggestion(p => ({ ...p, section: e.target.value }))}><option>Open dance</option><option>Special event song</option><option>Schedule</option><option>Announcement</option><option>Other note</option></select><input className="wp-input" aria-label="Family or bridal-party suggestion" value={suggestion.text} onChange={e => setSuggestion(p => ({ ...p, text: e.target.value }))} placeholder="Add a song or note" /><button type="button" className="wp-button wp-button-dark" onClick={addSuggestion}>Add note</button></div>
+            <div className="wp-add-suggestion wedding-no-print"><select className="wp-input" aria-label="Suggestion section" value={suggestion.section} onChange={e => setSuggestion(p => ({ ...p, section: e.target.value }))}><option>Open dance</option><option>Special event song</option><option>Schedule</option><option>Announcement</option><option>Other note</option></select><input className="wp-input" aria-label="Family or bridal-party suggestion" value={suggestion.text} onChange={e => setSuggestion(p => ({ ...p, text: e.target.value }))} placeholder="Add a song or note" /><ActionButton type="button" className="wp-button wp-button-dark" onClick={addSuggestion}>Add note</ActionButton></div>
             {(plan.suggestions || []).length ? <ul className="wp-suggestions">{plan.suggestions.map((x, i) => <li key={`${x.createdAt || ''}-${i}`}><span className="wp-suggestion-section">{x.section}</span><b>{x.text}</b><small>From {x.from || 'Wedding party'}</small></li>)}</ul> : <p className="wp-empty-line">No family notes yet. Share the couple link to invite contributions.</p>}
             <Field label="Anything else the DJ should know?" value={plan.notes || ''} onChange={v => editPlan(p => ({ ...p, notes: v }))} multiline rows={4} placeholder="Venue restrictions, accessibility, surprises, or family details" />
           </section>
@@ -507,9 +538,9 @@ export default function WeddingPlanner({ shared = false }) {
           </section>
           <section className="wp-side-card wp-export-card">
             <p className="wp-side-kicker">Take it with you</p>
-            <button type="button" className="wp-button wp-button-dark wp-wide" disabled={progress.percent < 100} onClick={printSheet}>Save planning sheet as PDF</button>
-            <button type="button" className="wp-button wp-button-light wp-wide" disabled={playlistDisabled} onClick={downloadOpenDance}>Download open-dance playlist (.txt)</button>
-            <button type="button" className="wp-button wp-button-light wp-wide" disabled={playlistDisabled} onClick={() => setPrintMode('playlist')}>Save playlist as PDF</button>
+            <ActionButton type="button" className="wp-button wp-button-dark wp-wide" disabled={progress.percent < 100} onClick={printSheet}>Save planning sheet as PDF</ActionButton>
+            <ActionButton type="button" className="wp-button wp-button-light wp-wide" disabled={playlistDisabled} onClick={downloadOpenDance}>Download open-dance playlist (.txt)</ActionButton>
+            <ActionButton type="button" className="wp-button wp-button-light wp-wide" disabled={playlistDisabled} onClick={() => setPrintMode('playlist')}>Save playlist as PDF</ActionButton>
             <small>For PDF, choose “Save as PDF” in the print window.</small>
           </section>
           <section className="wp-side-card wp-playlist-preview wedding-print-playlist">
