@@ -11,6 +11,8 @@ import Planner from './Planner.jsx';
 import Intelligence from './Intelligence.jsx';
 
 const TABS = [['intelligence', 'SUPER INTELLIGENCE'], ['queue', 'SI QUE'], ['planner', 'AI Planner'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
+const MAIN_TABS = TABS.slice(0, 3);
+const PROFILE_TABS = TABS.slice(3);
 const FILTERS = [['new', 'New'], ['approved', 'Approved'], ['played', 'Played'], ['declined', 'Declined']];
 const ORIGIN = () => window.location.origin;
 async function siDjEventKey(input) {
@@ -80,15 +82,24 @@ export default function Studio() {
   const [outdoorMode, setOutdoorMode] = useState(() => { try { return localStorage.getItem('rl.outdoor') === '1'; } catch { return false; } });
   const toggleOutdoor = () => setOutdoorMode((v) => { const n = !v; try { localStorage.setItem('rl.outdoor', n ? '1' : '0'); } catch { /* ignore */ } return n; });
   const requestedTab = new URLSearchParams(location.search).get('tab');
-  const initialTab = TABS.some(([key]) => key === requestedTab) ? requestedTab : (() => { try { return sessionStorage.getItem('rl.tab') || 'queue'; } catch { return 'queue'; } })();
+  const storedTab = (() => { try { return sessionStorage.getItem('rl.tab') || 'queue'; } catch { return 'queue'; } })();
+  const initialTab = MAIN_TABS.some(([key]) => key === requestedTab) ? requestedTab : MAIN_TABS.some(([key]) => key === storedTab) ? storedTab : 'queue';
   const [tab, setTab] = useState(initialTab);
+  const settingsMenuRef = useRef(null);
   const [saved, setSaved] = useState('Saved'); const djRef = useRef(null); const timer = useRef(null); djRef.current = dj;
   useEffect(() => { document.title = 'Studio · DJ Request Live'; }, []);
   useEffect(() => {
-    if (!TABS.some(([key]) => key === requestedTab)) return;
+    if (!MAIN_TABS.some(([key]) => key === requestedTab)) return;
     setTab(requestedTab);
     try { sessionStorage.setItem('rl.tab', requestedTab); } catch { /* ignore */ }
   }, [requestedTab]);
+  useEffect(() => {
+    const closeOnOutsideClick = event => { if (settingsMenuRef.current && !settingsMenuRef.current.contains(event.target)) settingsMenuRef.current.open = false; };
+    const closeOnEscape = event => { if (event.key === 'Escape' && settingsMenuRef.current?.open) { settingsMenuRef.current.open = false; settingsMenuRef.current.querySelector('summary')?.focus(); } };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => { document.removeEventListener('pointerdown', closeOnOutsideClick); document.removeEventListener('keydown', closeOnEscape); };
+  }, []);
   useEffect(() => { api.me().then(({ user }) => setDj(user), (e) => { if (e.status === 401) nav('/login', { replace: true }); else setFail(true); }); }, [nav]);
   useEffect(() => {
     let alive = true;
@@ -141,6 +152,7 @@ export default function Studio() {
   const edit = useCallback((patch) => { setDj((d) => ({ ...d, ...(typeof patch === 'function' ? patch(d) : patch) })); setSaved('Saving…'); clearTimeout(timer.current); timer.current = setTimeout(saveNow, 700); }, [saveNow]);
   useEffect(() => () => clearTimeout(timer.current), []);
   const goTab = (k) => { setTab(k); try { sessionStorage.setItem('rl.tab', k); } catch { /* ignore */ } window.scrollTo(0, 0); };
+  const goProfileTab = (k) => { if (settingsMenuRef.current) settingsMenuRef.current.open = false; goTab(k); };
   const mergeMedia = (u) => setDj((d) => ({ ...d, logo: u.logo, wall: u.wall, photos: u.photos }));
   async function logout() { await saveNow(); try { await api.logout(); } catch { /* ignore */ } nav('/', { replace: true }); }
   if (fail) return <div className="rl rl-app"><div className="wrap"><section className="panel center"><h2 style={{ fontSize: 18 }}>We couldn’t load your page</h2><p className="hint">Refresh to try again.</p></section></div></div>;
@@ -148,9 +160,9 @@ export default function Studio() {
   return (
     <div className={"rl rl-app" + (outdoorMode ? " outdoor-mode" : "")}><div className="wrap wide">
       <div className="shead"><Link to="/" className="brand" style={{ textDecoration: 'none', color: 'inherit' }}><Mark size={28} badge />DJ Request Live</Link>
-        <div className="shead-r"><Link to="/event-planner" className="mini">Event planner</Link><Link to="/wedding-planner" className="mini">Wedding planner</Link><button className={"outdoor-toggle" + (outdoorMode ? " active" : "")} onClick={toggleOutdoor} aria-pressed={outdoorMode} title="High-contrast mode for bright outdoor sunlight">{outdoorMode ? "☀ Outdoor" : "☾ Dark"}</button><label className="golive" htmlFor="golive"><input type="checkbox" id="golive" checked={!!dj.is_live} onChange={(e) => { edit({ is_live: e.target.checked }); setTimeout(saveNow, 0); }} />{dj.is_live ? 'Taking requests' : 'Paused'}</label><button className="mini" onClick={logout}>Log out</button></div>
+        <div className="shead-r"><Link to="/event-planner" className="mini">Event planner</Link><Link to="/wedding-planner" className="mini">Wedding planner</Link><button className={"outdoor-toggle" + (outdoorMode ? " active" : "")} onClick={toggleOutdoor} aria-pressed={outdoorMode} title="High-contrast mode for bright outdoor sunlight">{outdoorMode ? "☀ Outdoor" : "☾ Dark"}</button><label className="golive" htmlFor="golive"><input type="checkbox" id="golive" checked={!!dj.is_live} onChange={(e) => { edit({ is_live: e.target.checked }); setTimeout(saveNow, 0); }} />{dj.is_live ? 'Taking requests' : 'Paused'}</label><details className="studio-profile-menu" ref={settingsMenuRef}><summary className="mini">Profile &amp; settings</summary><div className="studio-profile-menu-list" role="menu" aria-label="Profile and settings">{PROFILE_TABS.map(([key, label]) => <button type="button" role="menuitem" key={key} aria-current={tab === key ? 'page' : undefined} onClick={() => goProfileTab(key)}>{label}</button>)}<span className="studio-profile-menu-divider" /><button type="button" role="menuitem" className="studio-profile-logout" onClick={() => { settingsMenuRef.current.open = false; logout(); }}>Log out</button></div></details></div>
       </div>
-      <div className="tabs" role="tablist">{TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => goTab(k)}>{l}</button>)}</div>
+      <div className="tabs" role="tablist" aria-label="Main Studio sections">{MAIN_TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => goTab(k)}>{l}</button>)}</div>
       {tab === 'intelligence' && <Intelligence />}{tab === 'queue' && <QueueTab goTab={goTab} />}{tab === 'planner' && <Planner />}{tab === 'page' && <PageTab dj={dj} edit={edit} saved={saved} goTab={goTab} />}{tab === 'design' && <DesignTab dj={dj} edit={edit} saved={saved} mergeMedia={mergeMedia} goTab={goTab} />}{tab === 'share' && <ShareTab dj={dj} />}
     </div></div>
   );
