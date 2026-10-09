@@ -113,7 +113,8 @@ export default function EventPlanner({ shared = false }) {
       const result = await api.eventPlans();
       setPlans(result.plans || []);
       if (result.plans?.length) {
-        const saved = result.plans[0]; setPlanId(saved.id); setShareToken(saved.share_token); setPlan({ ...blankEventPlan(), ...(saved.plan || {}) });
+        const requestedId = new URLSearchParams(window.location.search).get('id');
+        const saved = result.plans.find(item => String(item.id) === String(requestedId)) || result.plans[0]; setPlanId(saved.id); setShareToken(saved.share_token); setPlan({ ...blankEventPlan(), ...(saved.plan || {}) });
       } else {
         const created = await api.createEventPlan(blankEventPlan());
         setPlanId(created.id); setShareToken(created.share_token); setPlan({ ...blankEventPlan(), ...(created.plan || {}) });
@@ -243,7 +244,7 @@ export default function EventPlanner({ shared = false }) {
       <header className="wp-topbar wedding-no-print">
         <Link to={shared ? '/' : '/studio?tab=queue'} className="wp-wordmark">DJ Request Live <span>Events</span></Link>
         <span className="wp-save-status" role="status">{status}</span>
-        {!shared && <Link className="wp-small-link" to="/studio?tab=queue">Back to Studio</Link>}
+        {!shared && <Link className="wp-small-link" to="/plans">All plans</Link>}
       </header>
       <section className="wp-hero"><div><p className="wp-kicker">Music for every kind of gathering</p><h1>{shared ? 'Shape the event together.' : 'Plan the music, keep everyone in the loop.'}</h1><p className="wp-lede">One shared plan for the venue, the crowd, favorite songs, and the moments that matter. Invite your team, host, or guests to contribute.</p></div><div className="wp-progressbox"><div className="wp-progress-top"><span>Planning progress</span><strong>{progress.percent}%</strong></div><div className="wp-progress"><span style={{ width: `${progress.percent}%` }} /></div><small>{progress.complete} of {progress.total} planning items answered</small></div></section>
 

@@ -181,7 +181,8 @@ export default function WeddingPlanner({ shared = false }) {
       const result = await api.weddingPlans();
       setPlans(result.plans || []);
       if (result.plans?.length) {
-        const saved = result.plans[0];
+        const requestedId = new URLSearchParams(window.location.search).get('id');
+        const saved = result.plans.find(item => String(item.id) === String(requestedId)) || result.plans[0];
         setPlanId(saved.id);
         setShareToken(saved.share_token);
         setPlan({ ...blankPlan(), ...(saved.plan || {}) });
@@ -380,7 +381,7 @@ export default function WeddingPlanner({ shared = false }) {
       <header className="wp-topbar wedding-no-print">
         <Link to={shared ? '/' : '/studio'} className="wp-wordmark">DJ Request Live <span>Weddings</span></Link>
         <span className="wp-save-status" role="status">{status}</span>
-        {!shared && <Link className="wp-small-link" to="/studio?tab=queue">Back to Studio</Link>}
+        {!shared && <Link className="wp-small-link" to="/plans">All plans</Link>}
       </header>
 
       <section className="wp-hero">
