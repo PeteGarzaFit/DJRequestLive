@@ -40,6 +40,13 @@ function libraryKey(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function weddingPlanJson(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad('invalid_wedding_plan');
+  const serialized = JSON.stringify(value);
+  if (Buffer.byteLength(serialized) > 90000) throw bad('wedding_plan_too_large', 413);
+  return serialized;
+}
+
 async function spotifyToken(db, u) {
   if (!u?.spotify_access_token) throw bad('spotify_not_connected', 400);
   let access = u.spotify_access_token;
@@ -162,6 +169,48 @@ export function createApp(db) {
       if (method !== 'GET' && method !== 'HEAD' && !sameOrigin(req)) throw bad('bad_origin', 403);
       const ip = clientIp(req);
       let m;
+
+      if (path === '/api/wedding-plans' && method === 'GET') {
+        const u = await requireUser(req);
+        const rows = await db.all('SELECT id, share_token, plan_json, created_at, updated_at FROM wedding_plans WHERE owner_id = ? ORDER BY updated_at DESC', [u.id]);
+        return send(res, 200, { plans: rows.map(row => ({ id: row.id, share_token: row.share_token, plan: json(row.plan_json, {}), created_at: Number(row.created_at), updated_at: Number(row.updated_at) })) }), true;
+      }
+
+      if (path === '/api/wedding-plans' && method === 'POST') {
+        const u = await requireUser(req);
+        const b = await readJson(req);
+        const serialized = weddingPlanJson(b.plan);
+        const token = crypto.randomBytes(32).toString('base64url');
+        const now = Date.now();
+        const row = await db.run('INSERT INTO wedding_plans (owner_id, share_token, plan_json, created_at, updated_at) VALUES (?,?,?,?,?)', [u.id, token, serialized, now, now]);
+        return send(res, 201, { id: row.insertId, share_token: token, plan: JSON.parse(serialized), updated_at: now }), true;
+      }
+
+      m = path.match(/^\/api\/wedding-plans\/(\d+)$/);
+      if (m && (method === 'GET' || method === 'PUT')) {
+        const u = await requireUser(req);
+        const row = await db.get('SELECT id, share_token, plan_json, created_at, updated_at FROM wedding_plans WHERE id = ? AND owner_id = ?', [Number(m[1]), u.id]);
+        if (!row) throw bad('wedding_plan_not_found', 404);
+        if (method === 'GET') return send(res, 200, { id: row.id, share_token: row.share_token, plan: json(row.plan_json, {}), updated_at: Number(row.updated_at) }), true;
+        const b = await readJson(req);
+        const serialized = weddingPlanJson(b.plan);
+        const now = Date.now();
+        await db.run('UPDATE wedding_plans SET plan_json = ?, updated_at = ? WHERE id = ? AND owner_id = ?', [serialized, now, row.id, u.id]);
+        return send(res, 200, { id: row.id, share_token: row.share_token, plan: JSON.parse(serialized), updated_at: now }), true;
+      }
+
+      m = path.match(/^\/api\/wedding-share\/([A-Za-z0-9_-]{43})$/);
+      if (m && (method === 'GET' || method === 'PUT')) {
+        const row = await db.get('SELECT id, plan_json, updated_at FROM wedding_plans WHERE share_token = ?', [m[1]]);
+        if (!row) throw bad('wedding_plan_not_found', 404);
+        if (method === 'GET') return send(res, 200, { plan: json(row.plan_json, {}), updated_at: Number(row.updated_at) }), true;
+        if (limited(`wedding-share:${m[1]}:${ip}`, 60, 3600000)) throw bad('rate_limited', 429);
+        const b = await readJson(req);
+        const serialized = weddingPlanJson(b.plan);
+        const now = Date.now();
+        await db.run('UPDATE wedding_plans SET plan_json = ?, updated_at = ? WHERE id = ?', [serialized, now, row.id]);
+        return send(res, 200, { plan: JSON.parse(serialized), updated_at: now }), true;
+      }
 
       if (path === '/api/ai/music-intelligence' && method === 'GET') {
         const u = await requireUser(req);
