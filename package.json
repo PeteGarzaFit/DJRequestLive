@@ -22,18 +22,22 @@
     "si-dj:build": "node scripts/build-si-dj-knowledge.mjs"
   },
   "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "gsap": "^3.15.0",
+    "lenis": "^1.3.26",
     "mysql2": "^3.11.3",
+    "ogl": "^1.0.11",
+    "openai": "^6.26.0",
     "qrcode": "^1.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.9.4",
-    "openai": "^6.26.0"
+    "react-router-dom": "^7.9.4"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
-    "vite": "^7.1.7",
     "electron": "^41.10.7",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "vite": "^7.1.7"
   },
   "build": {
     "appId": "live.djrequest.si-bridge",
