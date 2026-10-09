@@ -24,6 +24,15 @@ CREATE TABLE wedding_plans (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX idx_wedding_plans_owner ON wedding_plans(owner_id, updated_at);
+CREATE TABLE event_plans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  share_token TEXT NOT NULL UNIQUE,
+  plan_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX idx_event_plans_owner ON event_plans(owner_id, updated_at);
 CREATE TABLE library_scans (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

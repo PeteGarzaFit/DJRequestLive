@@ -71,6 +71,18 @@ CREATE TABLE IF NOT EXISTS wedding_plans (
   INDEX idx_wedding_plans_owner (owner_id, updated_at)
 ) CHARACTER SET utf8mb4;
 
+-- General party and event plans with private collaboration links.
+CREATE TABLE IF NOT EXISTS event_plans (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  owner_id BIGINT UNSIGNED NOT NULL,
+  share_token CHAR(43) NOT NULL UNIQUE,
+  plan_json MEDIUMTEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_event_plans_owner (owner_id, updated_at)
+) CHARACTER SET utf8mb4;
+
 CREATE TABLE IF NOT EXISTS requests (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,

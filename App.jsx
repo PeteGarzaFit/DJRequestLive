@@ -9,6 +9,7 @@ import Intelligence from './pages/Intelligence.jsx';
 import Curator from './pages/Curator.jsx';
 import NightOf from './pages/NightOf.jsx';
 import WeddingPlanner from './pages/WeddingPlanner.jsx';
+import EventPlanner from './pages/EventPlanner.jsx';
 import Toaster from './components/Toaster.jsx';
 
 function GuestRoute() {
@@ -30,6 +31,8 @@ export default function App() {
         <Route path="/wedding-planner" element={<WeddingPlanner />} />
         <Route path="/wedding/:token" element={<WeddingPlanner shared />} />
         <Route path="/wedding-planner/:token" element={<WeddingPlanner shared />} />
+        <Route path="/event-planner" element={<EventPlanner />} />
+        <Route path="/event-plan/:token" element={<EventPlanner shared />} />
         <Route path="/event" element={<NightOf />} />
         <Route path="/dashboard" element={<Navigate to="/studio?tab=queue" replace />} />
         <Route path="/:slug" element={<GuestRoute />} />

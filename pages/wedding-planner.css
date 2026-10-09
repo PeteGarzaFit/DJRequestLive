@@ -69,6 +69,7 @@
 .wp-card > .wp-help { margin: -3px 0 12px; }
 .wp-time-list { border-top: 1px solid #e6e9eb; }
 .wp-time-row { display: grid; grid-template-columns: minmax(210px,1fr) 128px 88px; align-items: center; gap: 12px; min-height: 54px; border-bottom: 1px solid #e6e9eb; font-size: 12px; }
+.wp-time-row.event-moment-row { grid-template-columns: minmax(170px,1.2fr) minmax(110px,.7fr) minmax(140px,1fr) 64px; }
 .wp-time-row b { font-weight: 600; }
 .wp-order { color: var(--wp-gold); font: italic 13px Georgia,serif; margin-right: 9px; }
 .wp-check { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; color: var(--wp-muted); cursor: pointer; min-height: 36px; }
@@ -164,6 +165,8 @@
   .wp-grid-2,.wp-contact-grid { grid-template-columns: 1fr; }
   .wp-contact-row { grid-template-columns: minmax(100px,.65fr) minmax(0,1fr); }
   .wp-time-row { grid-template-columns: minmax(0,1fr) 100px 70px; gap: 7px; font-size: 10px; }
+  .wp-time-row.event-moment-row { grid-template-columns: minmax(0,1fr) 86px; gap: 6px; padding: 7px 0; }
+  .wp-time-row.event-moment-row > :first-child { grid-column: 1 / -1; }
   .wp-time-row .wp-input { min-height: 38px; padding: 6px; }
   .wp-table-head,.wp-table-row { grid-template-columns: 110px minmax(0,1fr) 56px; gap: 6px; }
   .wp-song-row { grid-template-columns: 1fr 1fr; }
