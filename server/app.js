@@ -774,22 +774,23 @@ ${JSON.stringify(library)}`;
       }
 
       if (path === '/api/si-dj/learning' && method === 'GET') {
-        await requireUser(req);
+        const u = await requireUser(req);
         const q = normalizeLibraryQuery(url.searchParams.get('q') || '');
         const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 200);
         const rows = await db.all(
-          `SELECT artist,title,play_count,dj_count,last_played
-           FROM si_dj_learning_tracks
-           WHERE (? = '' OR artist_key LIKE ? OR title_key LIKE ?)
-           ORDER BY play_count DESC,last_played DESC
+          `SELECT t.artist,t.title,d.play_count,1 AS dj_count,d.last_played
+           FROM si_dj_learning_track_djs d
+           JOIN si_dj_learning_tracks t ON t.id = d.track_id
+           WHERE d.user_id = ? AND (? = '' OR t.artist_key LIKE ? OR t.title_key LIKE ?)
+           ORDER BY d.play_count DESC,d.last_played DESC
            LIMIT ?`,
-          [q,'%' + q + '%','%' + q + '%',limit]
+          [u.id,q,'%' + q + '%','%' + q + '%',limit]
         );
         return send(res, 200, { learning: rows }), true;
       }
 
       if (path === '/api/si-dj/knowledge' && method === 'GET') {
-        await requireUser(req);
+        const u = await requireUser(req);
         await ensureSiDjKnowledge();
         const q = String(url.searchParams.get('q') || '').trim();
         const artist = String(url.searchParams.get('artist') || '').trim();
@@ -803,10 +804,13 @@ ${JSON.stringify(library)}`;
         const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 500);
         const tracks = searchSiDjKnowledge({ q, artist, genre, era, limit });
         const learned = await db.all(
-          `SELECT artist,title,play_count,dj_count,last_played
-           FROM si_dj_learning_tracks
-           ORDER BY play_count DESC,last_played DESC
-           LIMIT 1000`
+          `SELECT t.artist,t.title,d.play_count,d.last_played
+           FROM si_dj_learning_track_djs d
+           JOIN si_dj_learning_tracks t ON t.id = d.track_id
+           WHERE d.user_id = ?
+           ORDER BY d.play_count DESC,d.last_played DESC
+           LIMIT 1000`,
+          [u.id]
         );
         const learnedMap = new Map(learned.map((x) => [normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x]));
         let transitionMap = new Map();
@@ -817,50 +821,52 @@ ${JSON.stringify(library)}`;
           );
           if (from) {
             const rows = await db.all(
-              `SELECT t.artist,t.title,tr.transition_count,tr.dj_count,tr.last_played
-               FROM si_dj_learning_transitions tr
-               JOIN si_dj_learning_tracks t ON t.id = tr.to_track_id
-               WHERE tr.from_track_id = ?
-               ORDER BY tr.transition_count DESC,tr.dj_count DESC,tr.last_played DESC
+              `SELECT t.artist,t.title,td.play_count AS transition_count,td.last_seen AS last_played
+               FROM si_dj_learning_transition_djs td
+               JOIN si_dj_learning_tracks t ON t.id = td.to_track_id
+               WHERE td.from_track_id = ? AND td.user_id = ?
+               ORDER BY td.play_count DESC,td.last_seen DESC
                LIMIT 200`,
-              [from.id]
+              [from.id,u.id]
             );
             transitionMap = new Map(rows.map((x) => [normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x]));
           }
         }
 
         let contextMap = new Map();
-        if (eventType) {
+        {
           const contextRows = await db.all(
-            `SELECT t.artist,t.title,c.play_count,c.dj_count,c.last_played
-             FROM si_dj_learning_context c
-             JOIN si_dj_learning_tracks t ON t.id = c.track_id
-             WHERE c.event_type = ? AND (? = '' OR c.event_moment = ?)
-             ORDER BY c.play_count DESC,c.dj_count DESC,c.last_played DESC
+            `SELECT artist,title,COUNT(*) AS play_count,MAX(played_at) AS last_played
+             FROM si_dj_play_history
+             WHERE user_id = ? AND (? = '' OR event_type = ?) AND (? = '' OR event_moment = ?)
+             GROUP BY artist,title
+             ORDER BY play_count DESC,last_played DESC
              LIMIT 1000`,
-            [eventType,fromMoment,fromMoment]
+            [u.id,eventType,eventType,fromMoment,fromMoment]
           );
           contextMap = new Map(contextRows.map((x) => [
-            normalizeLibraryQuery(x.artist) + '\u0000' + normalizeLibraryQuery(x.title), x
+            normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x
           ]));
         }
 
 
         let eventMemoryMap = new Map();
-        if (eventType) {
-          // Event memory is temporary. Read consolidated signals from durable SI DJ context.
+        {
+          // Read only this DJ's completed events: songs planned, played, and requested.
           const memoryRows = await db.all(
-            `SELECT lt.artist,lt.title,
-                    SUM(c.play_count) AS memory_play_count,
-                    SUM(c.event_count) AS memory_event_count,
-                    SUM(c.request_count) AS memory_request_count
-             FROM si_dj_learning_context c
-             JOIN si_dj_learning_tracks lt ON lt.id = c.track_id
-             WHERE c.event_type = ? AND (? = '' OR c.event_moment = ?)
-             GROUP BY c.track_id,lt.artist,lt.title
+            `SELECT t.artist,t.title,
+                    SUM(t.played_count) AS memory_play_count,
+                    COUNT(DISTINCT m.id) AS memory_event_count,
+                    SUM(t.request_count) AS memory_request_count,
+                    SUM(t.planned_count) AS memory_planned_count
+             FROM si_dj_event_memory_tracks t
+             JOIN si_dj_event_memory m ON m.id = t.memory_id
+             WHERE m.user_id = ? AND (? = '' OR m.event_type = ?)
+               AND (? = '' OR t.moments_json LIKE ?)
+             GROUP BY t.artist_key,t.title_key,t.artist,t.title
              ORDER BY memory_play_count DESC,memory_request_count DESC
              LIMIT 1000`,
-            [eventType,fromMoment,fromMoment]
+            [u.id,eventType,eventType,fromMoment,`%${fromMoment}%`]
           );
           eventMemoryMap = new Map(memoryRows.map((x) => [
             normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x
@@ -872,15 +878,16 @@ ${JSON.stringify(library)}`;
           const live = learnedMap.get(key);
           const transition = transitionMap.get(key);
           const playCount = Number(live?.play_count || 0);
-          const djCount = Number(live?.dj_count || 0);
+          const djCount = live ? 1 : 0;
           const transitionCount = Number(transition?.transition_count || 0);
           const context = contextMap.get(key);
           const contextPlayCount = Number(context?.play_count || 0);
-          const contextDjCount = Number(context?.dj_count || 0);
+          const contextDjCount = context ? 1 : 0;
           const eventMemory = eventMemoryMap.get(key);
           const eventMemoryPlayCount = Number(eventMemory?.memory_play_count || 0);
           const eventMemoryEventCount = Number(eventMemory?.memory_event_count || 0);
           const eventMemoryRequestCount = Number(eventMemory?.memory_request_count || 0);
+          const eventMemoryPlannedCount = Number(eventMemory?.memory_planned_count || 0);
           return {
             ...track,
             live_play_count: playCount,
@@ -888,18 +895,19 @@ ${JSON.stringify(library)}`;
             live_last_played: Number(live?.last_played || 0),
             live_transition_count: transitionCount,
             live_transition_dj_count: Number(transition?.dj_count || 0),
-            live_learning_score: Math.min(40, Math.log1p(playCount) * 4 + Math.log1p(djCount) * 6 + Math.log1p(transitionCount) * 8),
-            live_transition_score: Math.min(35, Math.log1p(transitionCount) * 10 + Math.log1p(Number(transition?.dj_count || 0)) * 6),
+            live_learning_score: Math.min(40, Math.log1p(playCount) * 4 + Math.log1p(djCount) * 6),
+            live_transition_score: Math.min(35, Math.log1p(transitionCount) * 10),
             event_play_count: contextPlayCount,
             event_dj_count: contextDjCount,
             event_learning_score: Math.min(45, Math.log1p(contextPlayCount) * 7 + Math.log1p(contextDjCount) * 8),
             event_memory_play_count: eventMemoryPlayCount,
             event_memory_event_count: eventMemoryEventCount,
             event_memory_request_count: eventMemoryRequestCount,
+            event_memory_planned_count: eventMemoryPlannedCount,
             event_memory_score: Math.min(50, Math.log1p(eventMemoryPlayCount) * 10 + Math.log1p(eventMemoryEventCount) * 7 + Math.log1p(eventMemoryRequestCount) * 5)
           };
         });
-        return send(res, 200, { knowledge: { ...siDjKnowledgeSummary(), live_learning: true }, tracks: enriched }), true;
+        return send(res, 200, { knowledge: { ...siDjKnowledgeSummary(), live_learning: true, learning_scope: 'signed_in_dj' }, tracks: enriched }), true;
       }
 
       if (path === '/api/library/summary' && method === 'GET') {
@@ -942,7 +950,10 @@ ${JSON.stringify(library)}`;
         const artist = String(url.searchParams.get('artist') || '').trim();
         const genre = String(url.searchParams.get('genre') || '').trim();
         const fileType = String(url.searchParams.get('file_type') || '').trim().toUpperCase();
-        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 100);
+        const eventType = String(url.searchParams.get('event_type') || '').trim();
+        const eventMoment = String(url.searchParams.get('event_moment') || '').trim();
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 1000);
+        const offset = Math.min(Math.max(Number(url.searchParams.get('offset') || 0), 0), 10000000);
 
         const where = ['user_id = ?'];
         const params = [u.id];
@@ -965,14 +976,24 @@ ${JSON.stringify(library)}`;
           params.push(fileType);
         }
 
-        params.push(limit);
         const tracks = await db.all(
-          `SELECT id, artist, title, album, genre, bpm, year, file_type, duration_seconds, file_path, metadata_source
-           FROM library_tracks
+          `SELECT l.id, l.artist, l.title, l.album, l.genre, l.bpm, l.year, l.file_type, l.duration_seconds, l.file_path, l.metadata_source,
+                  COALESCE((SELECT d.play_count FROM si_dj_learning_tracks t JOIN si_dj_learning_track_djs d ON d.track_id = t.id
+                            WHERE d.user_id = ? AND t.artist_key = l.artist_key AND t.title_key = l.title_key LIMIT 1), 0) AS live_play_count,
+                  COALESCE((SELECT SUM(m.played_count) FROM si_dj_event_memory_tracks m JOIN si_dj_event_memory e ON e.id = m.memory_id
+                            WHERE e.user_id = ? AND m.artist_key = l.artist_key AND m.title_key = l.title_key
+                              AND (? = '' OR e.event_type = ?) AND (? = '' OR m.moments_json LIKE ?)), 0) AS event_memory_play_count,
+                  COALESCE((SELECT SUM(m.request_count) FROM si_dj_event_memory_tracks m JOIN si_dj_event_memory e ON e.id = m.memory_id
+                            WHERE e.user_id = ? AND m.artist_key = l.artist_key AND m.title_key = l.title_key
+                              AND (? = '' OR e.event_type = ?) AND (? = '' OR m.moments_json LIKE ?)), 0) AS event_memory_request_count,
+                  COALESCE((SELECT SUM(m.planned_count) FROM si_dj_event_memory_tracks m JOIN si_dj_event_memory e ON e.id = m.memory_id
+                            WHERE e.user_id = ? AND m.artist_key = l.artist_key AND m.title_key = l.title_key
+                              AND (? = '' OR e.event_type = ?) AND (? = '' OR m.moments_json LIKE ?)), 0) AS event_memory_planned_count
+           FROM library_tracks l
            WHERE ${where.join(' AND ')}
-           ORDER BY artist_key ASC, title_key ASC, id ASC
-           LIMIT ?`,
-          params,
+           ORDER BY l.artist_key ASC, l.title_key ASC, l.id ASC
+           LIMIT ? OFFSET ?`,
+          [u.id,u.id,eventType,eventType,eventMoment,`%${eventMoment}%`,u.id,eventType,eventType,eventMoment,`%${eventMoment}%`,u.id,eventType,eventType,eventMoment,`%${eventMoment}%`,...params,limit,offset],
         );
         return send(res, 200, { tracks }), true;
       }

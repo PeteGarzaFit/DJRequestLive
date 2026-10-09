@@ -110,6 +110,8 @@ function scoreSong(s, filters, now){
   if (s.live_transition_score) score += Math.min(30, Number(s.live_transition_score || 0));
   if (s.event_learning_score) score += Math.min(35, Number(s.event_learning_score || 0));
   if (s.event_memory_score) score += Math.min(40, Number(s.event_memory_score || 0));
+  const plannedButNotPlayed = Math.max(0, Number(s.event_memory_planned_count || 0) - Number(s.event_memory_play_count || 0));
+  if (plannedButNotPlayed) score -= Math.min(8, Math.log1p(plannedButNotPlayed) * 2);
   if (now?.title && s.title.toLowerCase() === String(now.title).toLowerCase()) score -= 100;
   return score;
 }
@@ -132,7 +134,9 @@ export default function Intelligence(){
   const [libraryBusy,setLibraryBusy]=useState(true);
   const [knowledgeTracks,setKnowledgeTracks]=useState([]);
   const [mode,setMode]=useState(()=>localStorage.getItem('djrl_si_mode') || 'playlist');
-  const [playlist,setPlaylist]=useState(()=>{ try{return JSON.parse(localStorage.getItem('djrl_si_playlist')||'[]')}catch{return[]} });
+  const [playlist,setPlaylist]=useState([]);
+  const [playlistOwner,setPlaylistOwner]=useState('');
+  const [playlistReady,setPlaylistReady]=useState(false);
   const [dragIndex,setDragIndex]=useState(null);
 
   const loadBridge=useCallback(async()=>{
@@ -146,6 +150,17 @@ export default function Intelligence(){
   },[]);
   useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2000); return()=>clearInterval(t); },[loadBridge]);
   useEffect(()=>{ api.spotifyStatus().then(s=>setSpotifyConnected(!!s.connected)).catch(()=>{}); },[]);
+  useEffect(()=>{
+    let active=true;
+    api.me().then(({user})=>{
+      if(!active)return;
+      const owner=String(user?.id || '');
+      let saved=[];
+      try{saved=JSON.parse(localStorage.getItem(`djrl_si_playlist:${owner}`)||'[]')}catch{}
+      setPlaylistOwner(owner);setPlaylist(Array.isArray(saved)?saved:[]);
+    }).catch(()=>{if(active)setPlaylist([])}).finally(()=>{if(active)setPlaylistReady(true)});
+    return()=>{active=false};
+  },[]);
 
   const bridgeTrackKey = (bridge.nowPlaying?.artist || '') + '|' + (bridge.nowPlaying?.title || '');
   const loadLibrary = useCallback(async()=>{
@@ -155,9 +170,18 @@ export default function Intelligence(){
       setLibrarySummary(summary?.inventory || null);
       setKnowledgeTracks((knowledgeResult?.tracks || []).map(t => ({...t,bpm:Number(t.bpm)||0,energy:Number(t.energy)||0,dancefloor:Number(t.dancefloor||0),singalong:Number(t.singalong||0),crossgen:Number(t.crossgen||0),knowledge_match:true})));
       if(Number(summary?.inventory?.tracks || 0) > 0){
-        const result = await api.librarySearch({ genre: genre === 'West Coast Swing' ? 'West Coast Swing' : genre, limit: 100 });
-        setLibraryTracks((result?.tracks || []).map(t=>({
+        const context = currentEventContext();
+        const tracks = [];
+        for(let offset = 0; ; offset += 1000){
+          const result = await api.librarySearch({ ...context, limit: 1000, offset });
+          const page = result?.tracks || [];
+          tracks.push(...page);
+          if(page.length < 1000) break;
+        }
+        setLibraryTracks(tracks.map(t=>({
           ...t,
+          live_learning_score: Math.min(40,Math.log1p(Number(t.live_play_count||0))*4),
+          event_memory_score: Math.min(50,Math.log1p(Number(t.event_memory_play_count||0))*10+Math.log1p(Number(t.event_memory_request_count||0))*5),
           era: t.year ? (Number(t.year)>=2020?'2020s':Number(t.year)>=2010?'2010s':Number(t.year)>=2000?'2000s':Number(t.year)>=1990?'90s':Number(t.year)>=1980?'80s':Number(t.year)>=1970?'70s':'CLASSICS') : 'CLASSICS',
           tags: genre === 'West Coast Swing' ? 'westcoastswing,wcs' : '',
         })));
@@ -171,7 +195,7 @@ export default function Intelligence(){
   },[genre,era,bridgeTrackKey]);
   useEffect(()=>{ loadLibrary(); },[loadLibrary]);
   useEffect(()=>{ localStorage.setItem('djrl_si_mode',mode); },[mode]);
-  useEffect(()=>{ localStorage.setItem('djrl_si_playlist',JSON.stringify(playlist)); },[playlist]);
+  useEffect(()=>{ if(playlistOwner&&playlistReady)localStorage.setItem(`djrl_si_playlist:${playlistOwner}`,JSON.stringify(playlist)); },[playlist,playlistOwner,playlistReady]);
 
   const filters={genre,vibe,era};
   const findSpotify=useCallback(async()=>{
@@ -189,10 +213,11 @@ export default function Intelligence(){
     }finally{setSpotifyBusy(false);}
   },[bridge.nowPlaying,query]);
   const addToPlaylist = useCallback((track)=>{
+    if(!playlistReady||!playlistOwner){toast('Sign in to save a playlist to your DJ account.');return;}
     const key=songKey(track);
     setPlaylist(current=>current.some(x=>songKey(x)===key) ? current : [...current,{title:track.title,artist:track.artist,bpm:track.bpm,genre:track.genre,era:track.era}]);
     toast(playlist.some(x=>songKey(x)===key) ? 'Already in playlist.' : 'Added to playlist.');
-  },[playlist]);
+  },[playlist,playlistOwner,playlistReady]);
   const removeFromPlaylist = useCallback((index)=>{
     setPlaylist(current=>current.filter((_,i)=>i!==index));
   },[]);
@@ -231,7 +256,7 @@ export default function Intelligence(){
       .sort((a,b)=>b._score-a._score || diversityScore(a,refreshNonce)-diversityScore(b,refreshNonce));
   },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce,libraryBusy,librarySummary,libraryTracks,knowledgeTracks,mode]);
 
-  const suggestionSource = Number(librarySummary?.tracks || 0) > 0 ? 'PRIVATE LIBRARY + GLOBAL KNOWLEDGE' : (knowledgeTracks.length ? 'SI DJ GLOBAL KNOWLEDGE' : 'SI DJ KNOWLEDGE');
+  const suggestionSource = Number(librarySummary?.tracks || 0) > 0 ? 'YOUR LIBRARY + YOUR EVENT LEARNING + SI DJ KNOWLEDGE' : (knowledgeTracks.length ? 'SI DJ GLOBAL KNOWLEDGE' : 'SI DJ KNOWLEDGE');
   const bridgeMode = bridge.connected && bridge.nowPlaying ? 'BRIDGE CONNECTED · LIVE TRACK ANCHOR' : 'BRIDGE OFFLINE · MANUAL SUGGESTIONS';
 
   useEffect(()=>{
@@ -342,7 +367,7 @@ export default function Intelligence(){
 
       <main>
         <section className="panel">
-          <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>{mode==='dj'?'Your next-track shortlist':'Build your party playlist'}</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · {mode==='dj'?'ranked against the current track':'add songs, then arrange the order'}</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{mode==='dj' && ai.length?'AI RANKED':suggestionSource}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
+            <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>{mode==='dj'?'Your next-track shortlist':'Build your party playlist'}</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · {mode==='dj'?`ranked from your library, event plays and guest requests${bridge.nowPlaying?' · anchored to what is playing':''}`:'add songs, then arrange the order'}</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{mode==='dj' && ai.length?'AI RANKED':suggestionSource}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
           <div className="field" style={{marginTop:14}}><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search artist or song…" /></div>
           <div style={{display:'grid',gap:9,marginTop:12}}>
             {display.map((s,i)=><article key={(s.title||'')+'|'+(s.artist||'')+'|'+i} style={{display:'grid',gridTemplateColumns:'44px minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'13px 14px',border:'1px solid rgba(255,255,255,.09)',borderRadius:12,background:'rgba(255,255,255,.025)'}}>
@@ -358,8 +383,8 @@ export default function Intelligence(){
           {display.length >= displayPool.length && displayPool.length > 0 && <p className="hint" style={{marginTop:10}}>Showing all {displayPool.length} matching tracks — no unrelated songs added.</p>}
         </section>
         {mode==='playlist' && <section className="panel" style={{marginTop:18}}>
-          <div className="shead">
-            <div><div className="eyebrow">MY PARTY PLAYLIST</div><h2 style={{margin:'5px 0 0'}}>{playlist.length} TRACKS</h2><p className="hint" style={{marginTop:4}}>Drag tracks to reorder them, or use the arrows. This order is saved on this device.</p></div>
+            <div className="shead">
+            <div><div className="eyebrow">MY PARTY PLAYLIST</div><h2 style={{margin:'5px 0 0'}}>{playlist.length} TRACKS</h2><p className="hint" style={{marginTop:4}}>{playlistReady?'Saved separately for each DJ account on this device. Drag or use the arrows to reorder.':'Loading this DJ’s saved playlist…'}</p></div>
             {playlist.length>0 && <button className="btn btn-ghost btn-sm" onClick={clearPlaylist}>CLEAR</button>}
           </div>
           {!playlist.length && <div style={{padding:'22px 8px',textAlign:'center',border:'1px dashed rgba(255,255,255,.14)',borderRadius:10,marginTop:12}}><strong>Your playlist is empty</strong><p className="hint" style={{margin:'5px 0 0'}}>Click ADD on any SI DJ suggestion above.</p></div>}
