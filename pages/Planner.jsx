@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { songRows } from '../lib/songLibrary.js';
 
@@ -45,12 +46,48 @@ const EXAMPLES = [
 ];
 
 export default function Planner() {
+  const navigate = useNavigate();
   const [event, setEvent] = useState('');
   const [plan, setPlan] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [buildProgress, setBuildProgress] = useState(0);
   const [mode, setMode] = useState('planner');
+  const [handoffBusy, setHandoffBusy] = useState(false);
+
+  const isWedding = /\b(wedding|bride|groom|bridal|ceremony|reception|father[-– ]daughter|mother[-– ]son)\b/i.test(event);
+
+  async function continueToForm() {
+    if (!plan || handoffBusy) return;
+    setHandoffBusy(true);
+    const musicNotes = [
+      `AI music plan: ${plan.summary || ''}`,
+      `Music mix: ${(plan.music_mix || []).map(item => `${item.label} ${item.percent}%`).join(', ')}`,
+      `Timeline: ${(plan.timeline || []).map(item => `${item.phase}: ${item.direction}`).join('\n')}`,
+      `Special moments: ${(plan.special_moments || []).map(item => `${item.moment}: ${item.music_direction}`).join('\n')}`,
+    ].filter(Boolean).join('\n\n');
+    try {
+      if (isWedding) {
+        const created = await api.createWeddingPlan({ title: plan.title || 'Wedding Music Plan', notes: `AI intake prompt: ${event}\n\n${musicNotes}` });
+        navigate(`/wedding-planner?id=${encodeURIComponent(created.id)}`);
+      } else {
+        const prompt = event.toLowerCase();
+        const eventType = /birthday|anniversary|40th|50th|60th/.test(prompt) ? 'Birthday or anniversary'
+          : /company|corporate|work party/.test(prompt) ? 'Company event'
+          : /school|community/.test(prompt) ? 'School or community event'
+          : /holiday|christmas|new year/.test(prompt) ? 'Holiday party'
+          : /fundrais|charity|benefit/.test(prompt) ? 'Fundraiser'
+          : /reunion/.test(prompt) ? 'Family reunion'
+          : /private party|party/.test(prompt) ? 'Private party'
+          : 'Other';
+        const created = await api.createEventPlan({ title: plan.title || 'New Event', eventType, audienceNotes: `AI intake prompt: ${event}\n\n${plan.crowd_profile || ''}`, notes: musicNotes });
+        navigate(`/event-planner?id=${encodeURIComponent(created.id)}`);
+      }
+    } catch {
+      setError(`Could not create the ${isWedding ? 'wedding' : 'event'} plan. Please try again.`);
+      setHandoffBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!busy) { setBuildProgress(0); return; }
@@ -130,7 +167,12 @@ export default function Planner() {
         ))}
       </section>
 
-      {plan && <PlanResult plan={plan} onRefine={run} busy={busy} />}
+      {plan && <><PlanResult plan={plan} onRefine={run} busy={busy} />
+        <section className="panel planner-form-handoff">
+          <div><b>Continue event planning</b><p className="hint">Your prompt and AI music summary will be saved into the {isWedding ? 'wedding' : 'event'} planner.</p></div>
+          <button className="btn btn-gold" disabled={handoffBusy} onClick={continueToForm}>{handoffBusy ? 'Creating planner…' : `Continue to ${isWedding ? 'Wedding' : 'Event'} Planner →`}</button>
+        </section>
+      </>}
       </>}
     </div>
   );
