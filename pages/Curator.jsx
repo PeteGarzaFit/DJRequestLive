@@ -102,8 +102,8 @@ export default function Curator(){
   return <div className="rl rl-app">
     <div className="wrap wide">
       <div className="shead" style={{marginBottom:14}}>
-        <Link to="/studio" className="brand" style={{textDecoration:'none',color:'inherit'}}><Mark size={28} badge/>DJ Request Live</Link>
-        <div className="shead-r"><Link className="mini" to="/event">DJ Event Mode</Link><Link className="mini" to="/intelligence">SI DJ</Link><Link className="mini" to="/studio">Studio</Link></div>
+        <Link to="/studio?tab=queue" className="brand" style={{textDecoration:'none',color:'inherit'}}><Mark size={28} badge/>DJ Request Live</Link>
+        <div className="shead-r"><Link className="mini" to="/event">DJ Event Mode</Link><Link className="mini" to="/intelligence">SI DJ</Link><Link className="mini" to="/studio?tab=queue">Studio</Link></div>
       </div>
 
       <section className="panel" style={{marginBottom:16}}>

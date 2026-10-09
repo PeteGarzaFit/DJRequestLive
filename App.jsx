@@ -31,7 +31,7 @@ export default function App() {
         <Route path="/wedding/:token" element={<WeddingPlanner shared />} />
         <Route path="/wedding-planner/:token" element={<WeddingPlanner shared />} />
         <Route path="/event" element={<NightOf />} />
-        <Route path="/dashboard" element={<Navigate to="/studio" replace />} />
+        <Route path="/dashboard" element={<Navigate to="/studio?tab=queue" replace />} />
         <Route path="/:slug" element={<GuestRoute />} />
       </Routes>
       <Toaster />

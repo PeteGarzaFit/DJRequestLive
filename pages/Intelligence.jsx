@@ -297,8 +297,8 @@ export default function Intelligence(){
   const display = displayPool.slice(0,visibleCount);
   return <div className="rl rl-app"><div className="wrap wide">
     <div className="shead" style={{marginBottom:12}}>
-      <Link to="/studio" className="brand" style={{textDecoration:'none',color:'inherit'}}><Mark size={28} badge/>DJ Request Live</Link>
-      <div className="shead-r"><Link className="mini" to="/studio">Studio</Link><Link className="mini" to="/bridge">Bridge</Link></div>
+      <Link to="/studio?tab=queue" className="brand" style={{textDecoration:'none',color:'inherit'}}><Mark size={28} badge/>DJ Request Live</Link>
+      <div className="shead-r"><Link className="mini" to="/studio?tab=queue">Studio</Link><Link className="mini" to="/bridge">Bridge</Link></div>
     </div>
 
     <section className="panel" style={{position:'sticky',top:10,zIndex:20,backdropFilter:'blur(18px)',background:'rgba(14,17,24,.94)',borderColor:bridge.connected?'rgba(34,197,94,.45)':'rgba(255,255,255,.12)'}}>

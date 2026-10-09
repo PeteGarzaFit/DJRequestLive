@@ -173,7 +173,7 @@ export default function NightOf() {
   return <div className="rl rl-app">
     <div className="wrap wide">
       <div className="shead" style={{marginBottom:14}}>
-        <Link to="/studio" className="brand" style={{textDecoration:'none',color:'inherit'}}><Mark size={28} badge/>DJ Request Live</Link>
+        <Link to="/studio?tab=queue" className="brand" style={{textDecoration:'none',color:'inherit'}}><Mark size={28} badge/>DJ Request Live</Link>
         <div className="shead-r"><Link className="mini" to="/curate">Planner</Link><Link className="mini" to="/intelligence">SI DJ</Link><button className="btn btn-ghost btn-sm" onClick={resetNight}>Reset Night</button></div>
       </div>
 

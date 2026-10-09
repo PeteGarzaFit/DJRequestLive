@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { api, toProfile, shrink, copyText, ago, errorText } from '../lib/api.js';
 import { THEMES, BGS, FONTS, hex, tipList, initials } from '../lib/theme.js';
@@ -76,12 +76,19 @@ function ping() {
 }
 
 export default function Studio() {
-  const nav = useNavigate(); const [dj, setDj] = useState(null); const [fail, setFail] = useState(false);
+  const nav = useNavigate(); const location = useLocation(); const [dj, setDj] = useState(null); const [fail, setFail] = useState(false);
   const [outdoorMode, setOutdoorMode] = useState(() => { try { return localStorage.getItem('rl.outdoor') === '1'; } catch { return false; } });
   const toggleOutdoor = () => setOutdoorMode((v) => { const n = !v; try { localStorage.setItem('rl.outdoor', n ? '1' : '0'); } catch { /* ignore */ } return n; });
-  const [tab, setTab] = useState(() => { try { return sessionStorage.getItem('rl.tab') || 'queue'; } catch { return 'queue'; } });
+  const requestedTab = new URLSearchParams(location.search).get('tab');
+  const initialTab = TABS.some(([key]) => key === requestedTab) ? requestedTab : (() => { try { return sessionStorage.getItem('rl.tab') || 'queue'; } catch { return 'queue'; } })();
+  const [tab, setTab] = useState(initialTab);
   const [saved, setSaved] = useState('Saved'); const djRef = useRef(null); const timer = useRef(null); djRef.current = dj;
   useEffect(() => { document.title = 'Studio · DJ Request Live'; }, []);
+  useEffect(() => {
+    if (!TABS.some(([key]) => key === requestedTab)) return;
+    setTab(requestedTab);
+    try { sessionStorage.setItem('rl.tab', requestedTab); } catch { /* ignore */ }
+  }, [requestedTab]);
   useEffect(() => { api.me().then(({ user }) => setDj(user), (e) => { if (e.status === 401) nav('/login', { replace: true }); else setFail(true); }); }, [nav]);
   useEffect(() => {
     let alive = true;

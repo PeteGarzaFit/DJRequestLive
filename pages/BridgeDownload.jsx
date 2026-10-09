@@ -7,7 +7,7 @@ const GITHUB_RELEASE = 'https://github.com/PeteGarzaFit/DJRequestLive/releases/l
 
 export default function BridgeDownload(){
   return <div className="bridge-download">
-    <header><Logo /><Link className="bridge-studio-link" to="/studio">DJ Studio</Link></header>
+    <header><Logo /><Link className="bridge-studio-link" to="/studio?tab=queue">DJ Studio</Link></header>
     <main>
       <span className="bd-kicker">SUPER INTELLIGENCE DJ</span>
       <h1>SI DJ Bridge</h1>

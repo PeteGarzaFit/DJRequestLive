@@ -380,7 +380,7 @@ export default function WeddingPlanner({ shared = false }) {
       <header className="wp-topbar wedding-no-print">
         <Link to={shared ? '/' : '/studio'} className="wp-wordmark">DJ Request Live <span>Weddings</span></Link>
         <span className="wp-save-status" role="status">{status}</span>
-        {!shared && <Link className="wp-small-link" to="/studio">Back to Studio</Link>}
+        {!shared && <Link className="wp-small-link" to="/studio?tab=queue">Back to Studio</Link>}
       </header>
 
       <section className="wp-hero">
