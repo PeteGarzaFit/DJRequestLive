@@ -80,7 +80,7 @@ async function main() {
   });
 
   const port = Number(process.env.PORT || 3000);
-  server.listen(port, () => console.log(`DJ Request Live listening on ${port} (${db.driver})`));
+  server.listen(port, '0.0.0.0', () => console.log(`DJ Request Live listening on ${port} (${db.driver})`));
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

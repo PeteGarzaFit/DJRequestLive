@@ -45,6 +45,24 @@ function parseTrackLine(line) {
   };
 }
 
+function readHistory(file) {
+  try {
+    const text = fs.readFileSync(file, 'utf8');
+    const lines = text.split(/\r?\n/);
+    const entries = [];
+    let date = null;
+    for (const line of lines) {
+      const header = line.trim().match(/^VirtualDJ History - (\d{4}\/\d{2}\/\d{2})$/i);
+      if (header) { date = header[1]; continue; }
+      const raw = line.trim();
+      const m = raw.match(/^(\d{1,2}:\d{2})\s*:\s*(.+?)\s+-\s+(.+)$/);
+      if (!m) continue;
+      entries.push({ time:m[1], artist:m[2].trim(), title:m[3].trim(), raw, date });
+    }
+    return entries;
+  } catch { return []; }
+}
+
 function readLastLine(file) {
   try {
     const stat = fs.statSync(file);
@@ -153,6 +171,21 @@ const server = http.createServer((req, res) => {
   }
 
   if (u.pathname === '/health' || u.pathname === '/now-playing') return out(res, 200, state);
+
+  if (u.pathname === '/played') {
+    const configured = cfg().virtualdjHistory?.historyFile;
+    const file = configured || defaultVdjHistoryFile();
+    const entries = readHistory(file);
+    const after = Math.max(0, Number(u.searchParams.get('after') || 0));
+    return out(res, 200, {
+      connected: entries.length > 0,
+      source: 'virtualdj-history',
+      cursor: entries.length,
+      reset: after > entries.length,
+      entries: entries.slice(after),
+      updatedAt: Date.now()
+    });
+  }
 
   if (u.pathname === '/config') {
     return out(res, 200, {

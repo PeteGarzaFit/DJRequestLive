@@ -10,6 +10,14 @@ export async function createDb() {
     const d = new DatabaseSync(process.env.SQLITE_FILE || ':memory:');
     d.exec('PRAGMA foreign_keys = ON');
     d.exec(readFileSync(new URL('./schema.sqlite.sql', import.meta.url), 'utf8'));
+    const contextColumns = new Set(d.prepare('PRAGMA table_info(si_dj_learning_context)').all().map((r) => r.name));
+    for (const [name, type] of [
+      ['planned_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['request_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['event_count', 'INTEGER NOT NULL DEFAULT 0'],
+    ]) {
+      if (!contextColumns.has(name)) d.exec('ALTER TABLE si_dj_learning_context ADD COLUMN ' + name + ' ' + type);
+    }
     return {
       driver: 'sqlite',
       async all(sql, p = []) { return d.prepare(sql).all(...p).map((r) => ({ ...r })); },
@@ -20,8 +28,15 @@ export async function createDb() {
   }
 
   const mysql = await import('mysql2/promise');
+  const configuredHost = String(process.env.DB_HOST || '').trim().toLowerCase();
+  // Hostinger's Node runtime may resolve localhost to IPv6. Use IPv4 for the local MySQL service.
+  const dbHost = (!configuredHost || configuredHost === 'localhost' || configuredHost === '::1' || configuredHost === '127.0.0.1')
+    ? '127.0.0.1'
+    : configuredHost;
+
   const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
+    // Hostinger can resolve localhost to IPv6 (::1). Force local DB connections to IPv4.
+    host: dbHost,
     port: Number(process.env.DB_PORT || 3306),
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
@@ -33,6 +48,9 @@ export async function createDb() {
   const ddl = readFileSync(new URL('../schema.sql', import.meta.url), 'utf8').replace(/^\s*--.*$/gm, '');
   for (const stmt of ddl.split(';').map((s) => s.trim()).filter(Boolean)) await pool.query(stmt);
   for (const stmt of [
+    'ALTER TABLE si_dj_learning_context ADD COLUMN planned_count BIGINT UNSIGNED NOT NULL DEFAULT 0',
+    'ALTER TABLE si_dj_learning_context ADD COLUMN request_count BIGINT UNSIGNED NOT NULL DEFAULT 0',
+    'ALTER TABLE si_dj_learning_context ADD COLUMN event_count BIGINT UNSIGNED NOT NULL DEFAULT 0',
     'ALTER TABLE users ADD COLUMN spotify_access_token TEXT NULL',
     'ALTER TABLE users ADD COLUMN spotify_refresh_token TEXT NULL',
     'ALTER TABLE users ADD COLUMN spotify_expires_at BIGINT NULL',

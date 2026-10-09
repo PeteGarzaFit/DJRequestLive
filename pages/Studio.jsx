@@ -13,6 +13,58 @@ import Intelligence from './Intelligence.jsx';
 const TABS = [['intelligence', 'SUPER INTELLIGENCE'], ['queue', 'SI QUE'], ['planner', 'AI Planner'], ['page', 'My page'], ['design', 'Design'], ['share', 'QR code']];
 const FILTERS = [['new', 'New'], ['approved', 'Approved'], ['played', 'Played'], ['declined', 'Declined']];
 const ORIGIN = () => window.location.origin;
+async function siDjEventKey(input) {
+  try {
+    const bytes = new TextEncoder().encode(input);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest)).map((x) => x.toString(16).padStart(2, '0')).join('');
+  } catch {
+    let h = 2166136261;
+    for (const ch of String(input)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    return String(h >>> 0).padStart(32, '0');
+  }
+}
+function currentEventContext(playedAt) {
+  try {
+    const plan = JSON.parse(localStorage.getItem('djrl_event_curator') || '{}');
+    if (!plan || !plan.eventType) return {};
+    const moments = plan.eventType === 'Wedding'
+      ? ['Pre-Ceremony','Processional','Bride Entrance','Unity / Special Ceremony Song','Recessional','Cocktail','Dinner / Background','Grand Entrance','Bridal Party Entrance','First Dance','Father–Daughter Dance','Mother–Son Dance','Anniversary Dance','Open Dance Floor','Cake Cutting','Bouquet Toss','Garter / Alternative','Toasts / Speeches','Last Dance','Must Play','Do Not Play']
+      : ['Arrival / Cocktail','Dinner / Background','Main Event','Must Play','Do Not Play','Last Songs'];
+    const d = new Date(Number(playedAt) || Date.now());
+    if (plan.details?.eventDate) {
+      const eventDate = String(plan.details.eventDate);
+      const playedDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      if (eventDate !== playedDate) return { event_type: String(plan.eventType || '') };
+    }
+    const mins = d.getHours() * 60 + d.getMinutes();
+    const times = plan.timelineTimes || {};
+    const candidates = moments.map(item => {
+      const raw = times[item];
+      if (!raw) return null;
+      const parts = String(raw).split(':').map(Number);
+      if (parts.length !== 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return null;
+      return { item, minutes: parts[0] * 60 + parts[1] };
+    }).filter(Boolean).sort((a,b) => a.minutes - b.minutes);
+    const active = [...candidates].reverse().find(x => x.minutes <= mins);
+    return {
+      event_type: String(plan.eventType || ''),
+      event_moment: active?.item || '',
+      event_key_context: String(plan.name || plan.eventType || '').slice(0,160)
+    };
+  } catch { return {}; }
+}
+
+function bridgePlayedAt(track) {
+  const raw = String(track?.raw || '');
+  const m = raw.match(/^(\\d{1,2}):(\\d{2})\\s*:/);
+  const now = new Date();
+  if (!m) return Date.now();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(m[1]), Number(m[2]), 0, 0);
+  if (d.getTime() > Date.now() + 2 * 3600000) d.setDate(d.getDate() - 1);
+  return d.getTime();
+}
+
 
 function ping() {
   try {
@@ -31,6 +83,49 @@ export default function Studio() {
   const [saved, setSaved] = useState('Saved'); const djRef = useRef(null); const timer = useRef(null); djRef.current = dj;
   useEffect(() => { document.title = 'Studio · DJ Request Live'; }, []);
   useEffect(() => { api.me().then(({ user }) => setDj(user), (e) => { if (e.status === 401) nav('/login', { replace: true }); else setFail(true); }); }, [nav]);
+  useEffect(() => {
+    let alive = true;
+    let timerId = null;
+    let cursor = Number(localStorage.getItem('djrl_si_bridge_cursor') || 0);
+
+    const pollAndLearn = async () => {
+      try {
+        const r = await fetch('http://127.0.0.1:8765/played?after=' + encodeURIComponent(cursor), { cache: 'no-store' });
+        if (!r.ok) return;
+        const history = await r.json();
+        if (history.reset) cursor = 0;
+        const entries = Array.isArray(history.entries) ? history.entries : [];
+        for (const track of entries) {
+          const playedAt = track.date
+            ? new Date(String(track.date).replaceAll('/', '-') + 'T' + String(track.time || '00:00') + ':00').getTime()
+            : Date.now();
+          const signature = [history.source || 'bridge', track.date || '', track.time || '', track.artist, track.title].join('|');
+          const eventKey = await siDjEventKey(signature);
+          await api.siDjRecordPlay({
+            event_key: eventKey,
+            played_at: Number.isFinite(playedAt) ? playedAt : Date.now(),
+            artist: track.artist,
+            title: track.title,
+            source: history.source || 'bridge',
+            raw: track.raw || '',
+            ...currentEventContext(playedAt)
+          });
+        }
+        if (history.reset) cursor = entries.length;
+        else cursor = Number(history.cursor || (cursor + entries.length));
+        if (alive) {
+          try { localStorage.setItem('djrl_si_bridge_cursor', String(cursor)); } catch { /* ignore */ }
+        }
+      } catch {
+        // Bridge or learning API can be offline without interrupting the Studio.
+      }
+    };
+
+    pollAndLearn();
+    timerId = setInterval(pollAndLearn, 3000);
+    return () => { alive = false; if (timerId) clearInterval(timerId); };
+  }, []);
+
   const saveNow = useCallback(async () => {
     clearTimeout(timer.current); const d = djRef.current; if (!d) return; if (!String(d.name || '').trim()) { setSaved('Name needed'); return; }
     try { await api.saveMe({ name: d.name, tagline: d.tagline || '', genres: d.genres || '', min_tip: +d.min_tip || 0, pay: d.pay, design: d.design, is_live: d.is_live }); setSaved('Saved'); }

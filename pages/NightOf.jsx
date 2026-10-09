@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mark } from '../components/Logo.jsx';
+import { api, errorText } from '../lib/api.js';
+import { toast } from '../lib/toast.js';
 
 const WEDDING_MOMENTS = [
   ['CEREMONY','Pre-Ceremony','Processional','Bride Entrance','Unity / Special Ceremony Song','Recessional'],
@@ -34,6 +36,24 @@ function formatTime(value) {
   return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
 }
 
+async function eventMemoryKey(plan) {
+  const input = [
+    plan?.eventType || '',
+    plan?.name || '',
+    plan?.details?.venue || '',
+    plan?.details?.eventDate || ''
+  ].join('|').trim();
+  try {
+    const bytes = new TextEncoder().encode(input);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2,'0')).join('');
+  } catch {
+    let h = 2166136261;
+    for (const ch of input) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    return String(h >>> 0).padStart(64,'0');
+  }
+}
+
 export default function NightOf() {
   const [plan] = useState(loadPlan);
   const [done, setDone] = useState(() => {
@@ -42,6 +62,8 @@ export default function NightOf() {
   const [nowPlaying, setNowPlaying] = useState(null);
   const [bridge, setBridge] = useState(false);
   const [clock, setClock] = useState(new Date());
+  const [memory, setMemory] = useState(null);
+  const [memoryBusy, setMemoryBusy] = useState(false);
 
   const moments = useMemo(() => plan.eventType === 'Wedding'
     ? WEDDING_MOMENTS.flatMap(([group, ...items]) => items.map(item => ({ group, item })))
@@ -77,6 +99,38 @@ export default function NightOf() {
   function resetNight() {
     setDone({});
     localStorage.removeItem('djrl_event_night_done');
+    setMemory(null);
+  }
+
+  async function saveEventMemory() {
+    if (!plan.details?.eventDate) {
+      toast('Set the event date in the Planner before consolidating event learning.');
+      return;
+    }
+    if (!plan.eventType || !plan.name) {
+      toast('Save the event plan before consolidating event learning.');
+      return;
+    }
+    setMemoryBusy(true);
+    try {
+      const eventKey = await eventMemoryKey(plan);
+      const result = await api.siDjEventMemory({
+        event_key: eventKey,
+        event_type: plan.eventType,
+        event_name: plan.name,
+        venue: plan.details?.venue || '',
+        event_date: plan.details.eventDate,
+        closed_at: Date.now(),
+        selections: plan.selections || {},
+        done
+      });
+      setMemory(result.memory || null);
+      toast('Event memory saved to SI DJ.');
+    } catch (e) {
+      toast(errorText(e));
+    } finally {
+      setMemoryBusy(false);
+    }
   }
 
   const totalItems = moments.reduce((n, m) => n + ((plan.selections || {})[m.item] || []).length, 0);
@@ -203,6 +257,21 @@ export default function NightOf() {
           <section className="panel">
             <div className="eyebrow">NEXT UP</div>
             {nextMoment ? <><h2 style={{margin:'5px 0'}}>{nextMoment.item}</h2><p className="hint">{nextTimed ? formatTime(times[nextTimed.item]) + ' · ' : ''}{(plan.selections?.[nextMoment.item] || []).length} planned song{(plan.selections?.[nextMoment.item] || []).length===1?'':'s'}.</p></> : <p className="hint">The planned music is complete.</p>}
+          </section>
+
+          <section className="panel">
+            <div className="eyebrow">SI DJ EVENT LEARNING</div>
+            <h2 style={{margin:'5px 0'}}>Teach SI DJ what happened.</h2>
+            <p className="hint">Consolidate the completed event into SI DJ's master learning database. SI DJ keeps the useful performance signals — played, planned, skipped and requested songs — and immediately purges the temporary event capture.</p>
+            <button className="btn btn-gold btn-block" onClick={saveEventMemory} disabled={memoryBusy || memory?.consolidated}>{memoryBusy ? 'Consolidating…' : memory?.consolidated ? 'LEARNING CONSOLIDATED' : 'CONSOLIDATE TO SI DJ'}</button>
+            {memory?.consolidated && <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:7,marginTop:10}}>
+              {[
+                ['PLAYED',memory.totals?.played_tracks ?? 0],
+                ['UNIQUE',memory.totals?.unique_played ?? 0],
+                ['PLANNED HIT',memory.totals?.planned_played ?? 0],
+                ['REPEAT REQUESTS',memory.totals?.repeat_request_count ?? 0]
+              ].map(([label,value])=><div key={label} style={{padding:'9px',border:'1px solid rgba(255,255,255,.08)',borderRadius:8}}><small style={{display:'block',opacity:.5,fontWeight:800}}>{label}</small><strong>{value}</strong></div>)}
+            </div>}
           </section>
 
           <section className="panel">

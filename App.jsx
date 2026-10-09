@@ -29,6 +29,7 @@ export default function App() {
         <Route path="/curate" element={<Curator />} />
         <Route path="/wedding-planner" element={<WeddingPlanner />} />
         <Route path="/wedding/:token" element={<WeddingPlanner shared />} />
+        <Route path="/wedding-planner/:token" element={<WeddingPlanner shared />} />
         <Route path="/event" element={<NightOf />} />
         <Route path="/dashboard" element={<Navigate to="/studio" replace />} />
         <Route path="/:slug" element={<GuestRoute />} />

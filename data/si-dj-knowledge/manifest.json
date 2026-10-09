@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "generated_at": "2026-10-08T16:14:00.558Z",
+  "track_count": 32801,
+  "chunk_size": 750,
+  "chunks": [
+    "part-0001.json",
+    "part-0002.json",
+    "part-0003.json",
+    "part-0004.json",
+    "part-0005.json",
+    "part-0006.json",
+    "part-0007.json",
+    "part-0008.json",
+    "part-0009.json",
+    "part-0010.json",
+    "part-0011.json",
+    "part-0012.json",
+    "part-0013.json",
+    "part-0014.json",
+    "part-0015.json",
+    "part-0016.json",
+    "part-0017.json",
+    "part-0018.json",
+    "part-0019.json",
+    "part-0020.json",
+    "part-0021.json",
+    "part-0022.json",
+    "part-0023.json",
+    "part-0024.json",
+    "part-0025.json",
+    "part-0026.json",
+    "part-0027.json",
+    "part-0028.json",
+    "part-0029.json",
+    "part-0030.json",
+    "part-0031.json",
+    "part-0032.json",
+    "part-0033.json",
+    "part-0034.json",
+    "part-0035.json",
+    "part-0036.json",
+    "part-0037.json",
+    "part-0038.json",
+    "part-0039.json",
+    "part-0040.json",
+    "part-0041.json",
+    "part-0042.json",
+    "part-0043.json",
+    "part-0044.json"
+  ],
+  "sources": {
+    "billboard_hot_100": {
+      "url": "https://raw.githubusercontent.com/mhollingshead/billboard-hot-100/main/all.json",
+      "coverage": "1958-present",
+      "kind": "historical_chart_signal"
+    },
+    "billboard_spotify_audio_features": {
+      "url": "https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2021/2021-09-14/audio_features.csv",
+      "coverage": "through 2021",
+      "kind": "audio_features_and_genre"
+    },
+    "texas_regional_radio_report": {
+      "url": "https://www.texasregionalradio.com/Top100.asp",
+      "coverage": "current_public_chart",
+      "kind": "texas_radio_signal"
+    },
+    "texas_internet_radio_chart": {
+      "url": "https://tirc.online/charts/tirc",
+      "coverage": "current_public_chart",
+      "kind": "texas_internet_radio_signal"
+    }
+  },
+  "methodology": "Aggregated chart signals for recommendation ranking. The source charts remain authoritative; SI DJ stores normalized music identity and derived ranking signals rather than reproducing chart presentation."
+}

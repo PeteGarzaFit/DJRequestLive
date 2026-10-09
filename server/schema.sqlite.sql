@@ -48,3 +48,128 @@ CREATE TABLE requests (
   amount REAL NOT NULL DEFAULT 0, method TEXT NOT NULL DEFAULT '', paid INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL, played_at INTEGER NULL
 );
+
+CREATE TABLE IF NOT EXISTS library_scans (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  source_file TEXT NOT NULL,
+  source_root TEXT NULL,
+  scanned_at TEXT NULL,
+  row_count INTEGER NOT NULL DEFAULT 0,
+  excluded_aliases INTEGER NOT NULL DEFAULT 0,
+  source_sha256 TEXT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS library_tracks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  scan_id TEXT NULL REFERENCES library_scans(id) ON DELETE SET NULL,
+  artist TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  album TEXT NOT NULL DEFAULT '',
+  genre TEXT NOT NULL DEFAULT '',
+  bpm REAL NULL,
+  year INTEGER NULL,
+  file_type TEXT NOT NULL DEFAULT '',
+  duration_seconds INTEGER NULL,
+  file_path TEXT NOT NULL,
+  metadata_source TEXT NOT NULL DEFAULT '',
+  artist_key TEXT NOT NULL DEFAULT '',
+  title_key TEXT NOT NULL DEFAULT '',
+  path_hash TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE (user_id, path_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_library_artist_key ON library_tracks(user_id, artist_key);
+CREATE INDEX IF NOT EXISTS idx_library_title_key ON library_tracks(user_id, title_key);
+CREATE INDEX IF NOT EXISTS idx_library_genre ON library_tracks(user_id, genre);
+CREATE INDEX IF NOT EXISTS idx_library_bpm ON library_tracks(user_id, bpm);
+CREATE INDEX IF NOT EXISTS idx_library_year ON library_tracks(user_id, year);
+CREATE INDEX IF NOT EXISTS idx_library_file_type ON library_tracks(user_id, file_type);
+CREATE INDEX IF NOT EXISTS idx_library_scan ON library_tracks(user_id, scan_id);
+
+CREATE TABLE IF NOT EXISTS si_dj_play_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  event_key TEXT NOT NULL,
+  played_at INTEGER NOT NULL,
+  artist TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT 'bridge',
+  raw_line TEXT NOT NULL DEFAULT '',
+  event_type TEXT NOT NULL DEFAULT '',
+  event_moment TEXT NOT NULL DEFAULT '',
+  event_key_context TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  UNIQUE (user_id, event_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_si_dj_play_user_time ON si_dj_play_history(user_id, played_at);
+CREATE INDEX IF NOT EXISTS idx_si_dj_play_track ON si_dj_play_history(artist, title);
+CREATE TABLE IF NOT EXISTS si_dj_learning_tracks (id INTEGER PRIMARY KEY AUTOINCREMENT, artist_key TEXT NOT NULL, title_key TEXT NOT NULL, artist TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', play_count INTEGER NOT NULL DEFAULT 0, dj_count INTEGER NOT NULL DEFAULT 0, last_played INTEGER NULL, first_played INTEGER NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (artist_key, title_key));
+CREATE INDEX IF NOT EXISTS idx_si_dj_learning_play_count ON si_dj_learning_tracks(play_count);
+CREATE INDEX IF NOT EXISTS idx_si_dj_learning_last_played ON si_dj_learning_tracks(last_played);
+
+CREATE TABLE IF NOT EXISTS si_dj_learning_track_djs (track_id INTEGER NOT NULL, user_id INTEGER NOT NULL, first_played INTEGER NOT NULL, last_played INTEGER NOT NULL, play_count INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (track_id, user_id));
+CREATE TABLE IF NOT EXISTS si_dj_learning_transitions (from_track_id INTEGER NOT NULL, to_track_id INTEGER NOT NULL, transition_count INTEGER NOT NULL DEFAULT 0, dj_count INTEGER NOT NULL DEFAULT 0, last_played INTEGER NULL, PRIMARY KEY (from_track_id, to_track_id));
+CREATE INDEX IF NOT EXISTS idx_si_dj_transition_count ON si_dj_learning_transitions(transition_count);
+CREATE INDEX IF NOT EXISTS idx_si_dj_transition_to ON si_dj_learning_transitions(to_track_id);
+CREATE TABLE IF NOT EXISTS si_dj_learning_transition_djs (from_track_id INTEGER NOT NULL, to_track_id INTEGER NOT NULL, user_id INTEGER NOT NULL, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, play_count INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (from_track_id, to_track_id, user_id));
+
+CREATE TABLE IF NOT EXISTS si_dj_learning_context (
+  track_id INTEGER NOT NULL,
+  event_type TEXT NOT NULL,
+  event_moment TEXT NOT NULL DEFAULT '',
+  play_count INTEGER NOT NULL DEFAULT 0,
+  dj_count INTEGER NOT NULL DEFAULT 0,
+  last_played INTEGER NULL,
+  PRIMARY KEY (track_id,event_type,event_moment)
+);
+CREATE INDEX IF NOT EXISTS idx_si_dj_context_type ON si_dj_learning_context(event_type,play_count);
+CREATE INDEX IF NOT EXISTS idx_si_dj_context_moment ON si_dj_learning_context(event_type,event_moment,play_count);
+
+
+-- Permanent post-event SI DJ memory.
+CREATE TABLE IF NOT EXISTS si_dj_event_memory (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_key TEXT NOT NULL,
+  event_type TEXT NOT NULL DEFAULT '',
+  event_name TEXT NOT NULL DEFAULT '',
+  venue TEXT NOT NULL DEFAULT '',
+  event_date TEXT NULL,
+  closed_at INTEGER NULL,
+  planned_track_count INTEGER NOT NULL DEFAULT 0,
+  played_track_count INTEGER NOT NULL DEFAULT 0,
+  unique_played_count INTEGER NOT NULL DEFAULT 0,
+  planned_played_count INTEGER NOT NULL DEFAULT 0,
+  unplanned_played_count INTEGER NOT NULL DEFAULT 0,
+  completion_pct REAL NOT NULL DEFAULT 0,
+  repeat_request_count INTEGER NOT NULL DEFAULT 0,
+  summary_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (user_id,event_key)
+);
+CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_type_date ON si_dj_event_memory(event_type,event_date);
+CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_user_date ON si_dj_event_memory(user_id,event_date);
+
+CREATE TABLE IF NOT EXISTS si_dj_event_memory_tracks (
+  memory_id INTEGER NOT NULL REFERENCES si_dj_event_memory(id) ON DELETE CASCADE,
+  artist_key TEXT NOT NULL,
+  title_key TEXT NOT NULL,
+  artist TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  moments_json TEXT NOT NULL,
+  planned_count INTEGER NOT NULL DEFAULT 0,
+  played_count INTEGER NOT NULL DEFAULT 0,
+  request_count INTEGER NOT NULL DEFAULT 0,
+  first_played INTEGER NULL,
+  last_played INTEGER NULL,
+  PRIMARY KEY (memory_id,artist_key,title_key)
+);
+CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_track ON si_dj_event_memory_tracks(artist_key,title_key);
+CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_track_played ON si_dj_event_memory_tracks(played_count);
+CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_track_requests ON si_dj_event_memory_tracks(request_count);

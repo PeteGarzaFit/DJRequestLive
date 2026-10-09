@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { AI_PLAN_SYSTEM } from '../lib/aiPlanner.js';
 import { songRows } from '../lib/songLibrary.js';
 import { fetchMusicIntelligence, MUSIC_LANES, MUSIC_SUBGENRES } from '../lib/musicIntelligence.js';
+import { searchSiDjKnowledge, siDjKnowledgeSummary, ensureSiDjKnowledge } from '../lib/siDjKnowledge.js';
 
 const RESERVED = ['studio', 'login', 'signup', 'dashboard', 'api', 'admin', 'assets', 'media', 'privacy', 'terms', 'help', 'index', 'app', 'www'];
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{2,29}$/;
@@ -102,6 +103,15 @@ const str = (v, max, { min = 0, trim = true } = {}) => {
 };
 const json = (s, fallback) => { try { const v = JSON.parse(s); return v ?? fallback; } catch { return fallback; } };
 const num = (v) => Number(v) || 0;
+const normalizeLibraryQuery = (value) => String(value || '')
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim()
+  .replace(/\s+/g, ' ');
+
 
 export function createApp(db) {
   const mediaUrl = (id) => (id ? `/media/${id}` : null);
@@ -122,6 +132,336 @@ export function createApp(db) {
     );
   }
   const requireUser = async (req) => { const u = await userFromRequest(req); if (!u) throw bad('not_signed_in', 401); return u; };
+  async function recordSiDjBridgePlay(u, b) {
+    const artist = str(b.artist || '', 255);
+    const title = str(b.title || '', 500);
+    if (!artist || !title) throw bad('invalid_field');
+    const eventKey = str(b.event_key || '', 64, { min: 32 });
+    const playedAt = Math.max(0, Number(b.played_at) || Date.now());
+    const source = str(b.source || 'bridge', 60);
+    const raw = str(b.raw || '', 1000);
+    const eventType = str(b.event_type || '', 80);
+    const eventMoment = str(b.event_moment || '', 160);
+    const eventKeyContext = str(b.event_key_context || '', 160);
+
+    try {
+      await db.run(
+        'INSERT INTO si_dj_play_history (user_id,event_key,played_at,artist,title,source,raw_line,event_type,event_moment,event_key_context,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        [u.id,eventKey,playedAt,artist,title,source,raw,eventType,eventMoment,eventKeyContext,Date.now()]
+      );
+    } catch (e) {
+      if (/duplicate|unique/i.test(String(e?.message || e?.code || ''))) {
+        return { recorded: false, duplicate: true };
+      }
+      throw e;
+    }
+
+    const artistKey = normalizeLibraryQuery(artist);
+    const titleKey = normalizeLibraryQuery(title);
+    let track = await db.get(
+      'SELECT * FROM si_dj_learning_tracks WHERE artist_key = ? AND title_key = ?',
+      [artistKey, titleKey]
+    );
+
+    if (!track) {
+      const made = await db.run(
+        'INSERT INTO si_dj_learning_tracks (artist_key,title_key,artist,title,play_count,dj_count,last_played,first_played,created_at,updated_at) VALUES (?,?,?,?,1,0,?,?,?,?)',
+        [artistKey,titleKey,artist,title,playedAt,playedAt,Date.now(),Date.now()]
+      );
+      track = await db.get('SELECT * FROM si_dj_learning_tracks WHERE id = ?', [made.insertId]);
+    } else {
+      await db.run(
+        'UPDATE si_dj_learning_tracks SET play_count = play_count + 1, last_played = ?, updated_at = ? WHERE id = ?',
+        [playedAt,Date.now(),track.id]
+      );
+    }
+
+    const knownDj = await db.get(
+      'SELECT track_id FROM si_dj_learning_track_djs WHERE track_id = ? AND user_id = ?',
+      [track.id,u.id]
+    );
+    if (knownDj) {
+      await db.run(
+        'UPDATE si_dj_learning_track_djs SET play_count = play_count + 1, last_played = ? WHERE track_id = ? AND user_id = ?',
+        [playedAt,track.id,u.id]
+      );
+    } else {
+      await db.run(
+        'INSERT INTO si_dj_learning_track_djs (track_id,user_id,first_played,last_played,play_count) VALUES (?,?,?,?,1)',
+        [track.id,u.id,playedAt,playedAt]
+      );
+      await db.run('UPDATE si_dj_learning_tracks SET dj_count = dj_count + 1 WHERE id = ?', [track.id]);
+    }
+
+
+    if (eventType) {
+      const context = await db.get(
+        'SELECT * FROM si_dj_learning_context WHERE track_id = ? AND event_type = ? AND event_moment = ?',
+        [track.id,eventType,eventMoment]
+      );
+      if (context) {
+        await db.run(
+          'UPDATE si_dj_learning_context SET play_count = play_count + 1,last_played = ? WHERE track_id = ? AND event_type = ? AND event_moment = ?',
+          [playedAt,track.id,eventType,eventMoment]
+        );
+      } else {
+        await db.run(
+          'INSERT INTO si_dj_learning_context (track_id,event_type,event_moment,play_count,dj_count,last_played) VALUES (?,?,?,?,?,?)',
+          [track.id,eventType,eventMoment,1,1,playedAt]
+        );
+      }
+    }
+
+    const previous = await db.get(
+      'SELECT artist,title,played_at FROM si_dj_play_history WHERE user_id = ? ORDER BY played_at DESC,id DESC LIMIT 1 OFFSET 1',
+      [u.id]
+    );
+    let transition = null;
+    if (previous) {
+      const from = await db.get(
+        'SELECT id FROM si_dj_learning_tracks WHERE artist_key = ? AND title_key = ?',
+        [normalizeLibraryQuery(previous.artist),normalizeLibraryQuery(previous.title)]
+      );
+      if (from && Number(from.id) !== Number(track.id)) {
+        const existing = await db.get(
+          'SELECT * FROM si_dj_learning_transitions WHERE from_track_id = ? AND to_track_id = ?',
+          [from.id,track.id]
+        );
+        if (existing) {
+          await db.run(
+            'UPDATE si_dj_learning_transitions SET transition_count = transition_count + 1, last_played = ? WHERE from_track_id = ? AND to_track_id = ?',
+            [playedAt,from.id,track.id]
+          );
+        } else {
+          await db.run(
+            'INSERT INTO si_dj_learning_transitions (from_track_id,to_track_id,transition_count,dj_count,last_played) VALUES (?,?,1,0,?)',
+            [from.id,track.id,playedAt]
+          );
+        }
+        const tdj = await db.get(
+          'SELECT * FROM si_dj_learning_transition_djs WHERE from_track_id = ? AND to_track_id = ? AND user_id = ?',
+          [from.id,track.id,u.id]
+        );
+        if (tdj) {
+          await db.run(
+            'UPDATE si_dj_learning_transition_djs SET play_count = play_count + 1,last_seen = ? WHERE from_track_id = ? AND to_track_id = ? AND user_id = ?',
+            [playedAt,from.id,track.id,u.id]
+          );
+        } else {
+          await db.run(
+            'INSERT INTO si_dj_learning_transition_djs (from_track_id,to_track_id,user_id,first_seen,last_seen,play_count) VALUES (?,?,?,?,?,1)',
+            [from.id,track.id,u.id,playedAt,playedAt]
+          );
+          await db.run(
+            'UPDATE si_dj_learning_transitions SET dj_count = dj_count + 1 WHERE from_track_id = ? AND to_track_id = ?',
+            [from.id,track.id]
+          );
+        }
+        transition = { from_artist: previous.artist, from_title: previous.title, to_artist: artist, to_title: title };
+      }
+    }
+
+    return {
+      recorded: true,
+      duplicate: false,
+      track: { artist, title, play_count: Number(track.play_count || 0) + 1, dj_count: Number(track.dj_count || 0) + (knownDj ? 0 : 1) },
+      transition
+    };
+  }
+
+
+  async function buildSiDjEventMemory(u, b) {
+    const eventType = str(b.event_type || '', 80, { min: 1 });
+    const eventName = str(b.event_name || '', 180, { min: 1 });
+    const venue = str(b.venue || '', 180);
+    const eventDate = str(b.event_date || '', 10, { min: 1 });
+    const eventKey = str(b.event_key || '', 64, { min: 32 });
+    const closedAt = Math.max(0, Number(b.closed_at) || Date.now());
+    const selections = b.selections && typeof b.selections === 'object' ? b.selections : {};
+    const done = b.done && typeof b.done === 'object' ? b.done : {};
+
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(eventDate)) throw bad('invalid_field');
+
+    const start = new Date(eventDate + 'T00:00:00').getTime();
+    const end = start + 86400000;
+    if (!Number.isFinite(start)) throw bad('invalid_field');
+
+    const normalizeSong = (artist, title) => ({
+      artist: String(artist || '').trim(),
+      title: String(title || '').trim(),
+      artist_key: normalizeLibraryQuery(artist),
+      title_key: normalizeLibraryQuery(title)
+    });
+    const planned = new Map();
+    for (const [moment, songs] of Object.entries(selections)) {
+      if (!Array.isArray(songs)) continue;
+      for (const song of songs.slice(0, 500)) {
+        const x = normalizeSong(song?.artist, song?.title);
+        if (!x.artist_key || !x.title_key) continue;
+        const key = x.artist_key + '\\u0000' + x.title_key;
+        const row = planned.get(key) || { ...x, planned_count: 0, moments: new Set() };
+        row.planned_count += 1;
+        if (moment) row.moments.add(String(moment).slice(0,160));
+        planned.set(key, row);
+      }
+    }
+
+    const plays = await db.all(
+      `SELECT artist,title,played_at,event_moment
+       FROM si_dj_play_history
+       WHERE user_id = ? AND event_key_context = ? AND played_at >= ? AND played_at < ?
+       ORDER BY played_at ASC,id ASC`,
+      [u.id,eventName,start,end]
+    );
+    const played = new Map();
+    for (const p of plays) {
+      const x = normalizeSong(p.artist,p.title);
+      if (!x.artist_key || !x.title_key) continue;
+      const key = x.artist_key + '\\u0000' + x.title_key;
+      const row = played.get(key) || { ...x, played_count: 0, first_played: Number(p.played_at) || null, last_played: Number(p.played_at) || null, moments: new Set() };
+      row.played_count += 1;
+      row.first_played = row.first_played || Number(p.played_at) || null;
+      row.last_played = Number(p.played_at) || row.last_played;
+      if (p.event_moment) row.moments.add(String(p.event_moment).slice(0,160));
+      played.set(key,row);
+    }
+
+    const requests = await db.all(
+      `SELECT song_title,artist,COUNT(*) AS request_count
+       FROM requests
+       WHERE user_id = ? AND created_at >= ? AND created_at < ?
+       GROUP BY song_title,artist
+       ORDER BY request_count DESC`,
+      [u.id,start,end]
+    );
+    const requestMap = new Map();
+    let repeatRequestCount = 0;
+    for (const r of requests) {
+      const x = normalizeSong(r.artist,r.song_title);
+      if (!x.title_key) continue;
+      const count = Number(r.request_count || 0);
+      const key = x.artist_key + '\\u0000' + x.title_key;
+      requestMap.set(key,count);
+      if (count > 1) repeatRequestCount += count - 1;
+    }
+
+    const allKeys = new Set([...planned.keys(), ...played.keys(), ...requestMap.keys()]);
+    const tracks = [];
+    for (const key of allKeys) {
+      const p = planned.get(key);
+      const q = played.get(key);
+      const requestCount = Number(requestMap.get(key) || 0);
+      tracks.push({
+        artist: p?.artist || q?.artist || '',
+        title: p?.title || q?.title || '',
+        artist_key: p?.artist_key || q?.artist_key || '',
+        title_key: p?.title_key || q?.title_key || '',
+        moments: [...new Set([...(p?.moments || []), ...(q?.moments || [])])],
+        planned_count: Number(p?.planned_count || 0),
+        played_count: Number(q?.played_count || 0),
+        request_count: requestCount,
+        first_played: q?.first_played || null,
+        last_played: q?.last_played || null
+      });
+    }
+    tracks.sort((a,b) => b.played_count - a.played_count || b.request_count - a.request_count || b.planned_count - a.planned_count);
+
+    const plannedTrackCount = [...planned.values()].reduce((n,x) => n + x.planned_count, 0);
+    const playedTrackCount = plays.length;
+    const uniquePlayedCount = played.size;
+    const plannedPlayedCount = tracks.filter(x => x.planned_count > 0 && x.played_count > 0).reduce((n,x) => n + x.played_count, 0);
+    const unplannedPlayedCount = tracks.filter(x => x.planned_count === 0 && x.played_count > 0).reduce((n,x) => n + x.played_count, 0);
+    const completionPct = plannedTrackCount ? Math.min(100, Math.round((plannedPlayedCount / plannedTrackCount) * 10000) / 100) : 0;
+    const repeatedTracks = tracks.filter(x => x.played_count > 1).slice(0,20);
+    const repeatedRequests = tracks.filter(x => x.request_count > 1).slice(0,20);
+    const worked = tracks.filter(x => x.played_count > 0 || x.request_count > 0).slice(0,50);
+    const skipped = tracks.filter(x => x.planned_count > 0 && x.played_count === 0).slice(0,50);
+
+    const summary = {
+      version: 1,
+      evidence: ['played_history','event_plan','guest_requests'],
+      event: { type:eventType, name:eventName, venue, date:eventDate },
+      totals: { planned_tracks:plannedTrackCount, played_tracks:playedTrackCount, unique_played:uniquePlayedCount, planned_played:plannedPlayedCount, unplanned_played:unplannedPlayedCount, completion_pct:completionPct, repeat_request_count:repeatRequestCount },
+      worked,
+      skipped,
+      repeated_tracks: repeatedTracks,
+      repeated_requests: repeatedRequests
+    };
+
+    let memory = await db.get('SELECT id FROM si_dj_event_memory WHERE user_id = ? AND event_key = ?', [u.id,eventKey]);
+    if (memory) {
+      await db.run(
+        `UPDATE si_dj_event_memory
+         SET event_type=?,event_name=?,venue=?,event_date=?,closed_at=?,planned_track_count=?,played_track_count=?,unique_played_count=?,planned_played_count=?,unplanned_played_count=?,completion_pct=?,repeat_request_count=?,summary_json=?,updated_at=?
+         WHERE id=? AND user_id=?`,
+        [eventType,eventName,venue,eventDate,closedAt,plannedTrackCount,playedTrackCount,uniquePlayedCount,plannedPlayedCount,unplannedPlayedCount,completionPct,repeatRequestCount,JSON.stringify(summary),Date.now(),memory.id,u.id]
+      );
+      await db.run('DELETE FROM si_dj_event_memory_tracks WHERE memory_id = ?', [memory.id]);
+    } else {
+      const made = await db.run(
+        `INSERT INTO si_dj_event_memory
+         (user_id,event_key,event_type,event_name,venue,event_date,closed_at,planned_track_count,played_track_count,unique_played_count,planned_played_count,unplanned_played_count,completion_pct,repeat_request_count,summary_json,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [u.id,eventKey,eventType,eventName,venue,eventDate,closedAt,plannedTrackCount,playedTrackCount,uniquePlayedCount,plannedPlayedCount,unplannedPlayedCount,completionPct,repeatRequestCount,JSON.stringify(summary),Date.now(),Date.now()]
+      );
+      memory = { id: made.insertId };
+    }
+
+    for (const t of tracks) {
+      if (!t.artist_key || !t.title_key) continue;
+      await db.run(
+        `INSERT INTO si_dj_event_memory_tracks
+         (memory_id,artist_key,title_key,artist,title,moments_json,planned_count,played_count,request_count,first_played,last_played)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [memory.id,t.artist_key,t.title_key,t.artist,t.title,JSON.stringify(t.moments),t.planned_count,t.played_count,t.request_count,t.first_played,t.last_played]
+      );
+    }
+
+    // Consolidate the temporary event buffer into durable SI DJ learning context.
+    // Played counts are already written by the Bridge; this pass adds the durable
+    // event-plan and guest-request signals before the temporary event rows are purged.
+    for (const t of tracks) {
+      if (!t.artist_key || !t.title_key) continue;
+      let masterTrack = await db.get(
+        'SELECT * FROM si_dj_learning_tracks WHERE artist_key = ? AND title_key = ?',
+        [t.artist_key, t.title_key]
+      );
+      if (!masterTrack) {
+        const made = await db.run(
+          'INSERT INTO si_dj_learning_tracks (artist_key,title_key,artist,title,play_count,dj_count,last_played,first_played,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+          [t.artist_key,t.title_key,t.artist,t.title,Number(t.played_count || 0),0,t.last_played || null,t.first_played || null,Date.now(),Date.now()]
+        );
+        masterTrack = await db.get('SELECT * FROM si_dj_learning_tracks WHERE id = ?', [made.insertId]);
+      }
+
+      const moments = t.moments.length ? t.moments : [''];
+      for (const moment of moments) {
+        const existing = await db.get(
+          'SELECT * FROM si_dj_learning_context WHERE track_id = ? AND event_type = ? AND event_moment = ?',
+          [masterTrack.id,eventType,String(moment).slice(0,160)]
+        );
+        if (existing) {
+          await db.run(
+            'UPDATE si_dj_learning_context SET planned_count = planned_count + ?, request_count = request_count + ?, event_count = event_count + 1, last_played = CASE WHEN ? > COALESCE(last_played,0) THEN ? ELSE last_played END WHERE track_id = ? AND event_type = ? AND event_moment = ?',
+            [Number(t.planned_count || 0),Number(t.request_count || 0),Number(t.last_played || 0),Number(t.last_played || 0),masterTrack.id,eventType,String(moment).slice(0,160)]
+          );
+        } else {
+          await db.run(
+            'INSERT INTO si_dj_learning_context (track_id,event_type,event_moment,play_count,dj_count,last_played,planned_count,request_count,event_count) VALUES (?,?,?,?,?,?,?,?,?)',
+            [masterTrack.id,eventType,String(moment).slice(0,160),Number(t.played_count || 0),0,t.last_played || null,Number(t.planned_count || 0),Number(t.request_count || 0),1]
+          );
+        }
+      }
+    }
+
+    // The event has now been distilled into SI DJ's durable learning tables.
+    // Do not retain the raw event-memory payload after successful consolidation.
+    await db.run('DELETE FROM si_dj_event_memory_tracks WHERE memory_id = ?', [memory.id]);
+    await db.run('DELETE FROM si_dj_event_memory WHERE id = ? AND user_id = ?', [memory.id,u.id]);
+
+    return { memory: null, consolidated: true, purged: true, event: { event_key:eventKey, event_type:eventType, event_name:eventName, venue, event_date:eventDate, totals:summary.totals }, worked, skipped, repeated_tracks:repeatedTracks, repeated_requests:repeatedRequests };
+  }
+
 
   async function startSession(req, res, userId, status, body) {
     const token = newToken();
@@ -324,6 +664,268 @@ ${JSON.stringify(library)}`;
             return send(res, 503, { error: 'planner_unavailable', message: 'The planner could not generate a safe result from the curated library.' }), true;
           }
         }
+      }
+
+
+      if (path === '/api/si-dj/event-memory' && method === 'POST') {
+        const u = await requireUser(req);
+        const b = await readJson(req);
+        const result = await buildSiDjEventMemory(u, b);
+        return send(res, 200, result), true;
+      }
+
+      if (path === '/api/si-dj/event-memory' && method === 'GET') {
+        const u = await requireUser(req);
+        const eventKey = String(url.searchParams.get('event_key') || '').trim();
+        const eventType = String(url.searchParams.get('event_type') || '').trim();
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 20),1),100);
+        const where = ['user_id = ?'];
+        const params = [u.id];
+        if (eventKey) { where.push('event_key = ?'); params.push(eventKey); }
+        if (eventType) { where.push('event_type = ?'); params.push(eventType); }
+        params.push(limit);
+        const rows = await db.all(
+          `SELECT id,event_key,event_type,event_name,venue,event_date,closed_at,planned_track_count,played_track_count,unique_played_count,planned_played_count,unplanned_played_count,completion_pct,repeat_request_count,summary_json,updated_at
+           FROM si_dj_event_memory
+           WHERE ${where.join(' AND ')}
+           ORDER BY event_date DESC,updated_at DESC
+           LIMIT ?`,
+          params
+        );
+        return send(res,200,{memories:rows.map(r=>({...r,summary:json(r.summary_json,{})}))}),true;
+      }
+
+      if (path === '/api/si-dj/event-memory/tracks' && method === 'GET') {
+        const u = await requireUser(req);
+        const eventType = String(url.searchParams.get('event_type') || '').trim();
+        const eventMoment = String(url.searchParams.get('event_moment') || '').trim();
+        const q = normalizeLibraryQuery(url.searchParams.get('q') || '');
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100),1),300);
+        const rows = await db.all(
+          `SELECT t.artist,t.title,t.planned_count,t.played_count,t.request_count,t.moments_json,m.event_type,m.event_name,m.event_date
+           FROM si_dj_event_memory_tracks t
+           JOIN si_dj_event_memory m ON m.id=t.memory_id
+           WHERE m.user_id = ?
+             AND (? = '' OR m.event_type = ?)
+             AND (? = '' OR t.moments_json LIKE ?)
+             AND (? = '' OR t.artist_key LIKE ? OR t.title_key LIKE ?)
+           ORDER BY t.played_count DESC,t.request_count DESC,m.event_date DESC
+           LIMIT ?`,
+          [u.id,eventType,eventType,eventMoment,'%' + eventMoment + '%',q,'%' + q + '%','%' + q + '%',limit]
+        );
+        return send(res,200,{tracks:rows.map(r=>({...r,moments:json(r.moments_json,[])}))}),true;
+      }
+
+
+      if (path === '/api/si-dj/plays' && method === 'POST') {
+        const u = await requireUser(req);
+        const b = await readJson(req);
+        const result = await recordSiDjBridgePlay(u, b);
+        return send(res, 200, result), true;
+      }
+
+      if (path === '/api/si-dj/learning' && method === 'GET') {
+        await requireUser(req);
+        const q = normalizeLibraryQuery(url.searchParams.get('q') || '');
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 200);
+        const rows = await db.all(
+          `SELECT artist,title,play_count,dj_count,last_played
+           FROM si_dj_learning_tracks
+           WHERE (? = '' OR artist_key LIKE ? OR title_key LIKE ?)
+           ORDER BY play_count DESC,last_played DESC
+           LIMIT ?`,
+          [q,'%' + q + '%','%' + q + '%',limit]
+        );
+        return send(res, 200, { learning: rows }), true;
+      }
+
+      if (path === '/api/si-dj/knowledge' && method === 'GET') {
+        await requireUser(req);
+        await ensureSiDjKnowledge();
+        const q = String(url.searchParams.get('q') || '').trim();
+        const artist = String(url.searchParams.get('artist') || '').trim();
+        const genre = String(url.searchParams.get('genre') || '').trim();
+        const era = String(url.searchParams.get('era') || '').trim();
+        const fromArtist = String(url.searchParams.get('from_artist') || '').trim();
+        const fromMoment = String(url.searchParams.get('event_moment') || '').trim();
+        const eventType = String(url.searchParams.get('event_type') || '').trim();
+
+        const fromTitle = String(url.searchParams.get('from_title') || '').trim();
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 500);
+        const tracks = searchSiDjKnowledge({ q, artist, genre, era, limit });
+        const learned = await db.all(
+          `SELECT artist,title,play_count,dj_count,last_played
+           FROM si_dj_learning_tracks
+           ORDER BY play_count DESC,last_played DESC
+           LIMIT 1000`
+        );
+        const learnedMap = new Map(learned.map((x) => [normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x]));
+        let transitionMap = new Map();
+        if (fromArtist && fromTitle) {
+          const from = await db.get(
+            'SELECT id FROM si_dj_learning_tracks WHERE artist_key = ? AND title_key = ?',
+            [normalizeLibraryQuery(fromArtist), normalizeLibraryQuery(fromTitle)]
+          );
+          if (from) {
+            const rows = await db.all(
+              `SELECT t.artist,t.title,tr.transition_count,tr.dj_count,tr.last_played
+               FROM si_dj_learning_transitions tr
+               JOIN si_dj_learning_tracks t ON t.id = tr.to_track_id
+               WHERE tr.from_track_id = ?
+               ORDER BY tr.transition_count DESC,tr.dj_count DESC,tr.last_played DESC
+               LIMIT 200`,
+              [from.id]
+            );
+            transitionMap = new Map(rows.map((x) => [normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x]));
+          }
+        }
+
+        let contextMap = new Map();
+        if (eventType) {
+          const contextRows = await db.all(
+            `SELECT t.artist,t.title,c.play_count,c.dj_count,c.last_played
+             FROM si_dj_learning_context c
+             JOIN si_dj_learning_tracks t ON t.id = c.track_id
+             WHERE c.event_type = ? AND (? = '' OR c.event_moment = ?)
+             ORDER BY c.play_count DESC,c.dj_count DESC,c.last_played DESC
+             LIMIT 1000`,
+            [eventType,fromMoment,fromMoment]
+          );
+          contextMap = new Map(contextRows.map((x) => [
+            normalizeLibraryQuery(x.artist) + '\u0000' + normalizeLibraryQuery(x.title), x
+          ]));
+        }
+
+
+        let eventMemoryMap = new Map();
+        if (eventType) {
+          // Event memory is temporary. Read consolidated signals from durable SI DJ context.
+          const memoryRows = await db.all(
+            `SELECT lt.artist,lt.title,
+                    SUM(c.play_count) AS memory_play_count,
+                    SUM(c.event_count) AS memory_event_count,
+                    SUM(c.request_count) AS memory_request_count
+             FROM si_dj_learning_context c
+             JOIN si_dj_learning_tracks lt ON lt.id = c.track_id
+             WHERE c.event_type = ? AND (? = '' OR c.event_moment = ?)
+             GROUP BY c.track_id,lt.artist,lt.title
+             ORDER BY memory_play_count DESC,memory_request_count DESC
+             LIMIT 1000`,
+            [eventType,fromMoment,fromMoment]
+          );
+          eventMemoryMap = new Map(memoryRows.map((x) => [
+            normalizeLibraryQuery(x.artist) + '\\u0000' + normalizeLibraryQuery(x.title), x
+          ]));
+        }
+
+        const enriched = tracks.map((track) => {
+          const key = normalizeLibraryQuery(track.artist) + '\\u0000' + normalizeLibraryQuery(track.title);
+          const live = learnedMap.get(key);
+          const transition = transitionMap.get(key);
+          const playCount = Number(live?.play_count || 0);
+          const djCount = Number(live?.dj_count || 0);
+          const transitionCount = Number(transition?.transition_count || 0);
+          const context = contextMap.get(key);
+          const contextPlayCount = Number(context?.play_count || 0);
+          const contextDjCount = Number(context?.dj_count || 0);
+          const eventMemory = eventMemoryMap.get(key);
+          const eventMemoryPlayCount = Number(eventMemory?.memory_play_count || 0);
+          const eventMemoryEventCount = Number(eventMemory?.memory_event_count || 0);
+          const eventMemoryRequestCount = Number(eventMemory?.memory_request_count || 0);
+          return {
+            ...track,
+            live_play_count: playCount,
+            live_dj_count: djCount,
+            live_last_played: Number(live?.last_played || 0),
+            live_transition_count: transitionCount,
+            live_transition_dj_count: Number(transition?.dj_count || 0),
+            live_learning_score: Math.min(40, Math.log1p(playCount) * 4 + Math.log1p(djCount) * 6 + Math.log1p(transitionCount) * 8),
+            live_transition_score: Math.min(35, Math.log1p(transitionCount) * 10 + Math.log1p(Number(transition?.dj_count || 0)) * 6),
+            event_play_count: contextPlayCount,
+            event_dj_count: contextDjCount,
+            event_learning_score: Math.min(45, Math.log1p(contextPlayCount) * 7 + Math.log1p(contextDjCount) * 8),
+            event_memory_play_count: eventMemoryPlayCount,
+            event_memory_event_count: eventMemoryEventCount,
+            event_memory_request_count: eventMemoryRequestCount,
+            event_memory_score: Math.min(50, Math.log1p(eventMemoryPlayCount) * 10 + Math.log1p(eventMemoryEventCount) * 7 + Math.log1p(eventMemoryRequestCount) * 5)
+          };
+        });
+        return send(res, 200, { knowledge: { ...siDjKnowledgeSummary(), live_learning: true }, tracks: enriched }), true;
+      }
+
+      if (path === '/api/library/summary' && method === 'GET') {
+        const u = await requireUser(req);
+        const totals = await db.get(
+          `SELECT
+             COUNT(*) AS tracks,
+             SUM(CASE WHEN artist <> '' THEN 1 ELSE 0 END) AS artists_known,
+             SUM(CASE WHEN bpm IS NOT NULL THEN 1 ELSE 0 END) AS bpm_known,
+             SUM(CASE WHEN year IS NOT NULL THEN 1 ELSE 0 END) AS years_known,
+             SUM(CASE WHEN duration_seconds IS NOT NULL THEN 1 ELSE 0 END) AS duration_known
+           FROM library_tracks
+           WHERE user_id = ?`,
+          [u.id],
+        );
+        const formats = await db.all(
+          'SELECT file_type, COUNT(*) AS tracks FROM library_tracks WHERE user_id = ? GROUP BY file_type ORDER BY tracks DESC, file_type ASC',
+          [u.id],
+        );
+        const latest = await db.get(
+          'SELECT id, source_file, source_root, scanned_at, row_count, excluded_aliases, source_sha256, created_at FROM library_scans WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
+          [u.id],
+        );
+        return send(res, 200, {
+          inventory: {
+            tracks: Number(totals?.tracks || 0),
+            artists_known: Number(totals?.artists_known || 0),
+            bpm_known: Number(totals?.bpm_known || 0),
+            years_known: Number(totals?.years_known || 0),
+            duration_known: Number(totals?.duration_known || 0),
+            formats: formats.map((row) => ({ file_type: row.file_type, tracks: Number(row.tracks || 0) })),
+            latest_scan: latest || null,
+          }
+        }), true;
+      }
+
+      if (path === '/api/library/search' && method === 'GET') {
+        const u = await requireUser(req);
+        const q = String(url.searchParams.get('q') || '').trim();
+        const artist = String(url.searchParams.get('artist') || '').trim();
+        const genre = String(url.searchParams.get('genre') || '').trim();
+        const fileType = String(url.searchParams.get('file_type') || '').trim().toUpperCase();
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 100);
+
+        const where = ['user_id = ?'];
+        const params = [u.id];
+
+        if (q) {
+          const like = '%' + q + '%';
+          where.push('(artist LIKE ? OR title LIKE ? OR album LIKE ? OR artist_key LIKE ? OR title_key LIKE ?)');
+          params.push(like, like, like, '%' + normalizeLibraryQuery(q) + '%', '%' + normalizeLibraryQuery(q) + '%');
+        }
+        if (artist) {
+          where.push('artist_key LIKE ?');
+          params.push('%' + normalizeLibraryQuery(artist) + '%');
+        }
+        if (genre) {
+          where.push('genre LIKE ?');
+          params.push('%' + genre + '%');
+        }
+        if (fileType) {
+          where.push('file_type = ?');
+          params.push(fileType);
+        }
+
+        params.push(limit);
+        const tracks = await db.all(
+          `SELECT id, artist, title, album, genre, bpm, year, file_type, duration_seconds, file_path, metadata_source
+           FROM library_tracks
+           WHERE ${where.join(' AND ')}
+           ORDER BY artist_key ASC, title_key ASC, id ASC
+           LIMIT ?`,
+          params,
+        );
+        return send(res, 200, { tracks }), true;
       }
 
       if (path === '/api/spotify/connect' && method === 'GET') {

@@ -3,6 +3,14 @@ name: Build SI DJ Bridge
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+    paths:
+      - 'bridge/**'
+      - 'bridge-app/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-bridge.yml'
     tags:
       - 'bridge-v*'
 
@@ -17,7 +25,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - run: npm install
       - name: Build Mac desktop installer
         run: npx electron-builder --mac dmg --publish never
@@ -33,7 +40,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - run: npm install
       - name: Build Windows desktop installer
         run: npx electron-builder --win nsis --publish never
