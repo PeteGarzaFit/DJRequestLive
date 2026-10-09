@@ -36,6 +36,10 @@ function spotifyState() {
   return Buffer.from(crypto.randomBytes(24)).toString('base64url');
 }
 
+function libraryKey(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 async function spotifyToken(db, u) {
   if (!u?.spotify_access_token) throw bad('spotify_not_connected', 400);
   let access = u.spotify_access_token;
@@ -75,9 +79,9 @@ async function readBody(req, limit) {
   }
   return Buffer.concat(chunks);
 }
-async function readJson(req) {
+async function readJson(req, limit = MAX_JSON) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw bad('json_required', 415);
-  const raw = await readBody(req, MAX_JSON);
+  const raw = await readBody(req, limit);
   try { const v = JSON.parse(raw.toString('utf8') || '{}'); if (v && typeof v === 'object') return v; } catch {}
   throw bad('bad_json');
 }
@@ -310,6 +314,86 @@ ${JSON.stringify(library)}`;
       if (path === '/api/spotify/status' && method === 'GET') {
         const u = await requireUser(req);
         return send(res, 200, { connected: !!u.spotify_refresh_token || !!u.spotify_access_token, display_name: u.spotify_display_name || null }), true;
+      }
+
+      if (path === '/api/spotify/search' && method === 'GET') {
+        const u = await requireUser(req);
+        if (limited(`spotify-search:${u.id}`, 30, 60000)) throw bad('rate_limited', 429);
+        const query = str(url.searchParams.get('q') || '', 120, { min: 2 });
+        const access = await spotifyToken(db, u);
+        const spotifyUrl = new URL('https://api.spotify.com/v1/search');
+        spotifyUrl.searchParams.set('type', 'track');
+        spotifyUrl.searchParams.set('limit', '20');
+        spotifyUrl.searchParams.set('q', query);
+        const r = await fetch(spotifyUrl, { headers: { Authorization: 'Bearer ' + access } });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw bad('spotify_api_error', 502);
+        const tracks = [];
+        for (const t of data.tracks?.items || []) {
+          const title = String(t.name || '').slice(0, 255);
+          const artist = String(t.artists?.map(a => a.name).join(', ') || '').slice(0, 255);
+          const titleKey = libraryKey(title);
+          const artistKeys = [...new Set([libraryKey(t.artists?.[0]?.name || artist), libraryKey(artist)])].filter(Boolean);
+          const versions = titleKey && artistKeys.length ? await db.all(
+            `SELECT title, artist, album, genre, bpm, year, file_type, duration_seconds, metadata_source FROM library_tracks WHERE user_id = ? AND title_key = ? AND artist_key IN (${artistKeys.map(() => '?').join(',')}) ORDER BY CASE WHEN file_type IN ('mp3','m4a','wav','flac','aiff','aac','ogg','wma','mp4','mov','m4v') THEN 0 ELSE 1 END, id DESC LIMIT 12`,
+            [u.id, titleKey, ...artistKeys],
+          ) : [];
+          tracks.push({
+            id: t.id, title, artist, album: t.album?.name || '', release_date: t.album?.release_date || '',
+            duration_ms: Number(t.duration_ms) || 0, popularity: Number(t.popularity) || 0,
+            uri: t.uri || null, url: t.external_urls?.spotify || null,
+            owned: versions.length > 0, versions,
+          });
+        }
+        return send(res, 200, { tracks, source: 'spotify_live' }), true;
+      }
+
+      if (path === '/api/library/import' && method === 'POST') {
+        const u = await requireUser(req);
+        const b = await readJson(req, 2 * 1024 * 1024);
+        const tracks = Array.isArray(b.tracks) ? b.tracks : [];
+        if (!tracks.length || tracks.length > 500) throw bad('invalid_library_batch');
+        const clean = tracks.map((item) => {
+          const title = str(item?.title, 255, { min: 1 });
+          const artist = str(item?.artist ?? '', 255);
+          const filePath = str(item?.file_path, 1500, { min: 1 });
+          const titleKey = libraryKey(title);
+          const artistKey = libraryKey(artist);
+          const pathHash = crypto.createHash('sha256').update(filePath).digest('hex');
+          return {
+            title, artist, filePath, titleKey, artistKey, pathHash,
+            album: str(item?.album ?? '', 255), genre: str(item?.genre ?? '', 120),
+            bpm: Number.isFinite(Number(item?.bpm)) && item?.bpm !== '' ? Number(item.bpm) : null,
+            year: str(String(item?.year ?? ''), 12), fileType: str(item?.file_type ?? '', 30).toLowerCase(),
+            duration: Number.isInteger(Number(item?.duration_seconds)) && Number(item.duration_seconds) >= 0 ? Number(item.duration_seconds) : null,
+            metadataSource: str(item?.metadata_source ?? '', 40),
+          };
+        });
+        const scan = await db.run('INSERT INTO library_scans (user_id, track_count, created_at) VALUES (?,?,?)', [u.id, clean.length, Date.now()]);
+        let imported = 0;
+        for (const t of clean) {
+          const sql = db.driver === 'sqlite'
+            ? 'INSERT OR IGNORE INTO library_tracks (user_id, scan_id, artist, title, album, genre, bpm, year, file_type, duration_seconds, file_path, metadata_source, artist_key, title_key, path_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+            : 'INSERT IGNORE INTO library_tracks (user_id, scan_id, artist, title, album, genre, bpm, year, file_type, duration_seconds, file_path, metadata_source, artist_key, title_key, path_hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
+          const r = await db.run(sql, [u.id, scan.insertId, t.artist, t.title, t.album, t.genre, t.bpm, t.year, t.fileType, t.duration, t.filePath, t.metadataSource, t.artistKey, t.titleKey, t.pathHash]);
+          imported += r.changes;
+        }
+        return send(res, 201, { scan_id: scan.insertId, imported, received: clean.length }), true;
+      }
+
+      if (path === '/api/library/summary' && method === 'GET') {
+        const u = await requireUser(req);
+        const row = await db.get('SELECT COUNT(*) AS tracks FROM library_tracks WHERE user_id = ?', [u.id]);
+        const scan = await db.get('SELECT MAX(created_at) AS last_scan_at FROM library_scans WHERE user_id = ?', [u.id]);
+        return send(res, 200, { tracks: Number(row?.tracks || 0), last_scan_at: scan?.last_scan_at || null }), true;
+      }
+
+      if (path === '/api/library/search' && method === 'GET') {
+        const u = await requireUser(req);
+        const q = libraryKey(str(url.searchParams.get('q') || '', 120, { min: 2 }));
+        const like = `%${q}%`;
+        const tracks = await db.all('SELECT title, artist, album, genre, bpm, year, file_type, duration_seconds, metadata_source FROM library_tracks WHERE user_id = ? AND (title_key LIKE ? OR artist_key LIKE ?) ORDER BY title, artist LIMIT 100', [u.id, like, like]);
+        return send(res, 200, { tracks }), true;
       }
 
       if (path === '/api/spotify/playlists' && method === 'GET') {

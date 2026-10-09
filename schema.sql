@@ -100,6 +100,40 @@ CREATE TABLE IF NOT EXISTS songs (
   INDEX idx_songs_active (active)
 ) CHARACTER SET utf8mb4;
 
+-- Private, DJ-owned inventory snapshots. Spotify catalog results are never stored here.
+CREATE TABLE IF NOT EXISTS library_scans (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  track_count INT UNSIGNED NOT NULL DEFAULT 0,
+  created_at BIGINT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_library_scans_user (user_id, created_at)
+) CHARACTER SET utf8mb4;
+
+CREATE TABLE IF NOT EXISTS library_tracks (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  scan_id BIGINT UNSIGNED NOT NULL,
+  artist VARCHAR(255) NOT NULL DEFAULT '',
+  title VARCHAR(255) NOT NULL,
+  album VARCHAR(255) NOT NULL DEFAULT '',
+  genre VARCHAR(120) NOT NULL DEFAULT '',
+  bpm DECIMAL(6,2) NULL,
+  year VARCHAR(12) NOT NULL DEFAULT '',
+  file_type VARCHAR(30) NOT NULL DEFAULT '',
+  duration_seconds INT UNSIGNED NULL,
+  file_path TEXT NOT NULL,
+  metadata_source VARCHAR(40) NOT NULL DEFAULT '',
+  artist_key VARCHAR(255) NOT NULL DEFAULT '',
+  title_key VARCHAR(255) NOT NULL DEFAULT '',
+  path_hash CHAR(64) NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (scan_id) REFERENCES library_scans(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_library_user_path (user_id, path_hash),
+  INDEX idx_library_user_artist_title (user_id, artist(120), title(120)),
+  INDEX idx_library_user_title_key (user_id, title_key(120))
+) CHARACTER SET utf8mb4;
+
 -- Reserved for Stripe boosts and subscriptions later.
 CREATE TABLE IF NOT EXISTS payments (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

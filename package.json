@@ -11,6 +11,7 @@
     "dev": "vite",
     "dev:api": "NODE_ENV=development DB_DRIVER=sqlite node server.js",
     "build": "vite build",
+    "test": "node --test",
     "start": "node server.js",
     "preview": "vite preview",
     "bridge": "node bridge/server.mjs",

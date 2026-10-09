@@ -102,6 +102,9 @@ export default function Intelligence(){
   const [query,setQuery]=useState('');
   const [ai,setAi]=useState([]);
   const [aiBusy,setAiBusy]=useState(false);
+  const [spotifyCandidates,setSpotifyCandidates]=useState([]);
+  const [spotifyBusy,setSpotifyBusy]=useState(false);
+  const [spotifyConnected,setSpotifyConnected]=useState(false);
 
   const loadBridge=useCallback(async()=>{
     try{
@@ -113,6 +116,7 @@ export default function Intelligence(){
     }
   },[]);
   useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2000); return()=>clearInterval(t); },[loadBridge]);
+  useEffect(()=>{ api.spotifyStatus().then(s=>setSpotifyConnected(!!s.connected)).catch(()=>{}); },[]);
 
   const filters={genre,vibe,era};
   const artistFilter = useMemo(()=>{
@@ -140,10 +144,28 @@ export default function Intelligence(){
     setAi([]);
   },[query,artistFilter,genre,vibe,era]);
 
+  const findSpotify=useCallback(async()=>{
+    const now=bridge.nowPlaying;
+    const term=query.trim() || [now?.title,now?.artist].filter(Boolean).join(' ');
+    if(term.length<2){toast('Enter a song or artist to search Spotify.');return [];}
+    setSpotifyBusy(true);
+    try{
+      const {tracks=[]}=await api.spotifySearch(term);
+      setSpotifyConnected(true);
+      setSpotifyCandidates(tracks);
+      if(!tracks.length) toast('Spotify did not find matching catalog tracks.');
+      return tracks;
+    }catch(e){
+      toast(e.code==='spotify_not_connected'?'Connect Spotify with the button above, then try again.':errorText(e));
+      return [];
+    }finally{setSpotifyBusy(false);}
+  },[bridge.nowPlaying,query]);
+
   const askAI=useCallback(async()=>{
     setAiBusy(true);
     try{
       const now=bridge.nowPlaying;
+      const catalog=await findSpotify();
       const candidates=local.slice(0,40).map(s=>({title:s.title,artist:s.artist,genre:s.genre,era:s.era,bpm:s.bpm,tags:s.tags}));
       const hardFilter = [
         artistFilter ? 'ARTIST HARD FILTER: '+artistFilter : '',
@@ -158,8 +180,9 @@ export default function Intelligence(){
         'DJ controls:', JSON.stringify(filters),
         hardFilter ? 'NON-NEGOTIABLE FILTERS: '+hardFilter : 'NON-NEGOTIABLE FILTERS: none',
         'Candidate library:', JSON.stringify(candidates),
+        'LIVE SPOTIFY CATALOG CANDIDATES; ownership and versions come only from the DJ private scanned library:', JSON.stringify(catalog.map(s=>({title:s.title,artist:s.artist,album:s.album,url:s.url,owned:s.owned,versions:s.versions}))),
         'Return JSON with recommendations: [{title,artist,reason,move}] and no more than 8 recommendations.',
-        'Rank the best practical next-track choices first. Favor smooth BPM/genre/energy transitions. Do not invent tracks; use only candidates. Never violate a hard artist, genre, era, or search filter.'
+        'Rank the best practical next-track choices first. Favor smooth BPM/genre/energy transitions. Do not invent tracks; use only candidates. Spotify availability does not mean the DJ owns a track; use its owned flag and versions. Never violate a hard artist, genre, era, or search filter.'
       ].join('\n');
       const {plan}=await api.aiEventPlan(prompt);
       const recs=(plan?.recommendations||[]).flatMap(g=>g.songs||[]).slice(0,8);
@@ -167,7 +190,7 @@ export default function Intelligence(){
       if(!recs.length) toast('SI DJ did not return recommendations. The local ranked library is still ready.');
     }catch(e){ toast(errorText(e)); }
     finally{setAiBusy(false);}
-  },[bridge.nowPlaying,filters,local,artistFilter,query]);
+  },[bridge.nowPlaying,filters,local,artistFilter,query,findSpotify]);
 
   const aiMap = useMemo(()=>{
     const map = new Map();
@@ -219,7 +242,10 @@ export default function Intelligence(){
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginTop:8}}>
           {ERAS.map(e=><button key={e} onClick={()=>{setEra(e);setAi([])}} style={{padding:'10px 5px',borderRadius:8,border:era===e?'2px solid var(--accent)':'1px solid rgba(255,255,255,.12)',background:era===e?'rgba(255,255,255,.10)':'rgba(255,255,255,.03)',color:'var(--fg)',fontSize:11,fontWeight:800,cursor:'pointer'}}>{e}</button>)}
         </div>
-        <button className="btn btn-gold btn-block" style={{marginTop:18}} onClick={askAI} disabled={aiBusy}>{aiBusy?'SI DJ is finding the best moves…':'Ask SI DJ for the best next tracks →'}</button>
+        {spotifyConnected
+          ? <button className="btn btn-ghost btn-block" style={{marginTop:18}} onClick={findSpotify} disabled={spotifyBusy}>{spotifyBusy?'Searching Spotify…':'Search live Spotify catalog'}</button>
+          : <a className="btn btn-ghost btn-block" style={{marginTop:18,textAlign:'center',textDecoration:'none'}} href={api.spotifyConnectUrl}>Connect Spotify for catalog search</a>}
+        <button className="btn btn-gold btn-block" style={{marginTop:8}} onClick={askAI} disabled={aiBusy}>{aiBusy?'SI DJ is finding the best moves…':'Ask SI DJ for the best next tracks →'}</button>
       </aside>
 
       <main>
@@ -242,6 +268,16 @@ export default function Intelligence(){
           <h2 style={{margin:'5px 0'}}>Stop digging through crates.</h2>
           <p className="hint">The current track is the anchor. Genre, vibe and era are your performance controls. SI DJ ranks a small set of practical next-track choices so the DJ can make the final call quickly.</p>
         </section>
+        {spotifyCandidates.length>0 && <section className="panel" style={{marginTop:18}}>
+          <div className="eyebrow">LIVE SPOTIFY CATALOG · PRIVATE LIBRARY MATCH</div>
+          <h2 style={{margin:'5px 0'}}>Catalog candidates and available versions</h2>
+          <p className="hint">Spotify is queried live for this search. Only a private library match confirms a local copy; catalog results are not saved or used for training.</p>
+          <div style={{display:'grid',gap:9,marginTop:12}}>{spotifyCandidates.map(s=><article key={s.id} style={{padding:'13px 14px',border:'1px solid rgba(255,255,255,.09)',borderRadius:12}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'start'}}><div><strong>{s.title}</strong><span style={{display:'block'}}>{s.artist}{s.album?' · '+s.album:''}</span></div><span className="ai-pill" style={{whiteSpace:'nowrap'}}>{s.owned?'IN YOUR LIBRARY':'CATALOG ONLY'}</span></div>
+            {s.versions?.length>0 && <div style={{marginTop:9,display:'grid',gap:4}}>{s.versions.map((v,i)=><small key={i}>{v.title} — {v.artist}{v.album?' · '+v.album:''}{v.file_type?' · '+v.file_type.toUpperCase():''}{v.bpm?' · '+v.bpm+' BPM':''}{v.genre?' · '+v.genre:''}</small>)}</div>}
+            <div style={{marginTop:8,display:'flex',gap:12,alignItems:'center'}}><small>{s.owned?`${s.versions.length} matching local ${s.versions.length===1?'version':'versions'}`:'No exact title and artist match in the scanned library.'}</small>{s.url&&<a href={s.url} target="_blank" rel="noreferrer">Open Spotify</a>}</div>
+          </article>)}</div>
+        </section>}
       </main>
     </div>
     </div>

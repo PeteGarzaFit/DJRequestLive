@@ -15,6 +15,12 @@ DJs sign up, add their payment handles (Cash App, Venmo, PayPal, Zelle, Apple Ca
 5. Deploy. On first start the server creates its tables from `schema.sql` (all `CREATE TABLE IF NOT EXISTS`, safe to re-run).
 6. Point `djrequestlive.com` at the app and enable SSL. Check `https://djrequestlive.com/api/health`: it should return `{"ok":true,...}`.
 
+### Spotify catalog search and SI DJ
+
+Create a Spotify Developer app and set `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` in the Node app's server environment (or in local `.env`). Set `SPOTIFY_REDIRECT_URI` to the exact callback URL registered in Spotify, for example `https://djrequestlive.com/api/spotify/callback`. These values stay on the server; do not add them to Vite variables or commit real credentials. DJs connect their own Spotify accounts through SI DJ. Spotify search is live reference data only: search results are not ingested into the database or used for AI training.
+
+SI DJ compares live Spotify candidates with the authenticated DJ's private `library_tracks` rows and returns exact title/artist matches plus available local versions. The library API is owner-scoped: `POST /api/library/import` accepts batches of up to 500 scanned records with `title`, `artist`, `file_path` and optional `album`, `genre`, `bpm`, `year`, `file_type`, `duration_seconds`, and `metadata_source`; `GET /api/library/summary` and `GET /api/library/search?q=...` read only the signed-in DJ's inventory. Import paths and metadata belong to that DJ and are never returned in public DJ pages. Repeated paths are ignored while distinct physical versions are preserved.
+
 ## Local development
 
 ```bash
