@@ -91,6 +91,17 @@ CREATE TABLE IF NOT EXISTS library_tracks (
   UNIQUE (user_id, path_hash)
 );
 
+CREATE TABLE IF NOT EXISTS si_dj_library_genre_overrides (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  artist_key TEXT NOT NULL,
+  title_key TEXT NOT NULL,
+  artist TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL,
+  genre TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, artist_key, title_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_library_artist_key ON library_tracks(user_id, artist_key);
 CREATE INDEX IF NOT EXISTS idx_library_title_key ON library_tracks(user_id, title_key);
 CREATE INDEX IF NOT EXISTS idx_library_genre ON library_tracks(user_id, genre);

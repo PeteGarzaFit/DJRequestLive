@@ -998,6 +998,45 @@ ${JSON.stringify(library)}`;
         return send(res, 200, { tracks }), true;
       }
 
+      if (path === '/api/library/genre-overrides' && method === 'GET') {
+        const u = await requireUser(req);
+        const overrides = await db.all(
+          'SELECT artist_key, title_key, artist, title, genre, updated_at FROM si_dj_library_genre_overrides WHERE user_id = ?',
+          [u.id],
+        );
+        return send(res, 200, { overrides }), true;
+      }
+
+      if (path === '/api/library/genre-overrides' && method === 'POST') {
+        const u = await requireUser(req);
+        const b = await readJson(req);
+        const title = str(b.title, 255, { min: 1 });
+        const artist = str(b.artist || '', 255);
+        const artistKey = libraryKey(artist);
+        const titleKey = libraryKey(title);
+        const genre = str(b.genre || '', 120);
+        if (!titleKey) throw bad('invalid_track');
+        if (!genre) {
+          await db.run('DELETE FROM si_dj_library_genre_overrides WHERE user_id = ? AND artist_key = ? AND title_key = ?', [u.id,artistKey,titleKey]);
+          return send(res, 200, { removed: true, artist, title }), true;
+        }
+        const updatedAt = Date.now();
+        if (db.driver === 'sqlite') {
+          await db.run(
+            `INSERT INTO si_dj_library_genre_overrides (user_id,artist_key,title_key,artist,title,genre,updated_at)
+             VALUES (?,?,?,?,?,?,?) ON CONFLICT(user_id,artist_key,title_key) DO UPDATE SET artist=excluded.artist,title=excluded.title,genre=excluded.genre,updated_at=excluded.updated_at`,
+            [u.id,artistKey,titleKey,artist,title,genre,updatedAt],
+          );
+        } else {
+          await db.run(
+            `INSERT INTO si_dj_library_genre_overrides (user_id,artist_key,title_key,artist,title,genre,updated_at)
+             VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE artist=VALUES(artist),title=VALUES(title),genre=VALUES(genre),updated_at=VALUES(updated_at)`,
+            [u.id,artistKey,titleKey,artist,title,genre,updatedAt],
+          );
+        }
+        return send(res, 200, { override: { artist, title, genre, updated_at: updatedAt } }), true;
+      }
+
       if (path === '/api/spotify/connect' && method === 'GET') {
         const u = await requireUser(req);
         if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) throw bad('spotify_not_configured', 503);

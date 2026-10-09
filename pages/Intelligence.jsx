@@ -90,9 +90,8 @@ function diversityScore(s, nonce){
 function scoreSong(s, filters, now){
   let score = Number(s.energy || 0) + Number(s.dancefloor || 0) + Number(s.singalong || 0) + Number(s.crossgen || 0);
   const hay = haystack(s);
-  const genre = String(filters.genre || '').toLowerCase();
   const vibe = String(filters.vibe || '').toLowerCase();
-  if (genre && hay.includes(genre)) score += 24;
+  if (genreMatches(s, filters.genre)) score += s.genre_override ? 40 : 24;
   if (filters.era && (s.era === filters.era || (filters.era === 'CURRENT' && hay.includes('current')))) score += 18;
   if (vibe.includes('raise') || vibe === 'peak time') score += Number(s.energy || 0) * 2;
   if (vibe === 'dance' || vibe === 'party') score += Number(s.dancefloor || 0) * 2;
@@ -132,6 +131,9 @@ export default function Intelligence(){
   const [librarySummary,setLibrarySummary]=useState(null);
   const [libraryTracks,setLibraryTracks]=useState([]);
   const [libraryBusy,setLibraryBusy]=useState(true);
+  const [genreOverrides,setGenreOverrides]=useState({});
+  const [editingGenreKey,setEditingGenreKey]=useState('');
+  const [savingGenreKey,setSavingGenreKey]=useState('');
   const [knowledgeTracks,setKnowledgeTracks]=useState([]);
   const [mode,setMode]=useState(()=>localStorage.getItem('djrl_si_mode') || 'playlist');
   const [playlist,setPlaylist]=useState([]);
@@ -166,7 +168,12 @@ export default function Intelligence(){
   const loadLibrary = useCallback(async()=>{
     setLibraryBusy(true);
     try{
-      const [summary, knowledgeResult] = await Promise.all([api.librarySummary(), api.siDjKnowledge({ ...currentEventContext(), genre, era: era === 'ALL' ? '' : era, from_artist: bridge.nowPlaying?.artist || '', from_title: bridge.nowPlaying?.title || '', limit: 500 })]);
+      const [summary, knowledgeResult, overridesResult] = await Promise.all([
+        api.librarySummary(),
+        api.siDjKnowledge({ ...currentEventContext(), genre, era: era === 'ALL' ? '' : era, from_artist: bridge.nowPlaying?.artist || '', from_title: bridge.nowPlaying?.title || '', limit: 500 }),
+        api.libraryGenreOverrides().catch(()=>({overrides:[]})),
+      ]);
+      setGenreOverrides(Object.fromEntries((overridesResult?.overrides||[]).map(item=>[songKey(item),item.genre])));
       setLibrarySummary(summary?.inventory || null);
       setKnowledgeTracks((knowledgeResult?.tracks || []).map(t => ({...t,bpm:Number(t.bpm)||0,energy:Number(t.energy)||0,dancefloor:Number(t.dancefloor||0),singalong:Number(t.singalong||0),crossgen:Number(t.crossgen||0),knowledge_match:true})));
       if(Number(summary?.inventory?.tracks || 0) > 0){
@@ -180,6 +187,8 @@ export default function Intelligence(){
         }
         setLibraryTracks(tracks.map(t=>({
           ...t,
+          private_library_track: true,
+          scannedGenre: t.genre,
           live_learning_score: Math.min(40,Math.log1p(Number(t.live_play_count||0))*4),
           event_memory_score: Math.min(50,Math.log1p(Number(t.event_memory_play_count||0))*10+Math.log1p(Number(t.event_memory_request_count||0))*5),
           era: t.year ? (Number(t.year)>=2020?'2020s':Number(t.year)>=2010?'2010s':Number(t.year)>=2000?'2000s':Number(t.year)>=1990?'90s':Number(t.year)>=1980?'80s':Number(t.year)>=1970?'70s':'CLASSICS') : 'CLASSICS',
@@ -227,6 +236,23 @@ export default function Intelligence(){
       const next=[...current]; const [item]=next.splice(from,1); next.splice(to,0,item); return next;
     });
   },[]);
+  const saveGenreCorrection = useCallback(async(track, correctedGenre)=>{
+    const key=songKey(track);
+    setSavingGenreKey(key);
+    try{
+      await api.saveLibraryGenreOverride({title:track.title,artist:track.artist,genre:correctedGenre});
+      setGenreOverrides(current=>{
+        const next={...current};
+        if(correctedGenre) next[key]=correctedGenre;
+        else delete next[key];
+        return next;
+      });
+      setLibraryTracks(current=>current.map(item=>songKey(item)===key?{...item,genre:correctedGenre||item.scannedGenre||'',genre_override:correctedGenre}:item));
+      setEditingGenreKey('');setAi([]);
+      toast(correctedGenre?`Genre corrected to ${correctedGenre}.`:'Scanned genre restored.');
+    }catch(e){toast(errorText(e));}
+    finally{setSavingGenreKey('');}
+  },[]);
   const clearPlaylist = useCallback(()=>{
     setPlaylist([]);
     toast('Playlist cleared.');
@@ -243,7 +269,11 @@ export default function Intelligence(){
     const hasPrivateLibrary = Number(librarySummary?.tracks || 0) > 0;
     const knowledgeIndex = new Map(knowledgeTracks.map(s => [songKey(s), s]));
     let rows = hasPrivateLibrary
-      ? libraryTracks.map(s => knowledgeIndex.has(songKey(s)) ? {...knowledgeIndex.get(songKey(s)), ...s, knowledge_match:true, genre:s.genre || knowledgeIndex.get(songKey(s)).genre} : s)
+      ? libraryTracks.map(s => {
+          const correctedGenre=genreOverrides[songKey(s)];
+          const known=knowledgeIndex.get(songKey(s));
+          return {...(known||{}),...s,knowledge_match:!!known,genre:correctedGenre||known?.genre||s.genre||'',genre_override:correctedGenre||'',scannedGenre:s.scannedGenre??s.genre};
+        })
       : (knowledgeTracks.length ? knowledgeTracks : songRows());
     if(artistFilter){
       rows=rows.filter(s=>normalizeArtist(s.artist)===normalizeArtist(artistFilter));
@@ -251,10 +281,10 @@ export default function Intelligence(){
       const q=normalizeText(query);
       rows=rows.filter(s=>normalizeText(haystack(s)).includes(q));
     }
-    rows=rows.filter(s=>genreMatches(s,genre) && eraMatches(s,era));
+    rows=rows.filter(s=>eraMatches(s,era));
     return rows.map(s=>({...s,_score:scoreSong(s,filters,mode==='dj'?bridge.nowPlaying:null)}))
       .sort((a,b)=>b._score-a._score || diversityScore(a,refreshNonce)-diversityScore(b,refreshNonce));
-  },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce,libraryBusy,librarySummary,libraryTracks,knowledgeTracks,mode]);
+  },[query,artistFilter,genre,vibe,era,bridge.nowPlaying,refreshNonce,libraryBusy,librarySummary,libraryTracks,knowledgeTracks,genreOverrides,mode]);
 
   const suggestionSource = Number(librarySummary?.tracks || 0) > 0 ? 'YOUR LIBRARY + YOUR EVENT LEARNING + SI DJ KNOWLEDGE' : (knowledgeTracks.length ? 'SI DJ GLOBAL KNOWLEDGE' : 'SI DJ KNOWLEDGE');
   const bridgeMode = bridge.connected && bridge.nowPlaying ? 'BRIDGE CONNECTED · LIVE TRACK ANCHOR' : 'BRIDGE OFFLINE · MANUAL SUGGESTIONS';
@@ -271,7 +301,6 @@ export default function Intelligence(){
       const candidates=local.slice(0,40).map(s=>({title:s.title,artist:s.artist,genre:s.genre,era:s.era,bpm:s.bpm,tags:s.tags}));
       const hardFilter = [
         artistFilter ? 'ARTIST HARD FILTER: '+artistFilter : '',
-        genre ? 'GENRE HARD FILTER: '+genre : '',
         era && era !== 'ALL' ? 'ERA HARD FILTER: '+era : '',
         query.trim() ? 'SEARCH: '+query.trim() : ''
       ].filter(Boolean).join(' | ');
@@ -281,9 +310,10 @@ export default function Intelligence(){
         'Current track:', mode==='dj' && now ? JSON.stringify(now) : 'No current track available.',
         'DJ controls:', JSON.stringify(filters),
         hardFilter ? 'NON-NEGOTIABLE FILTERS: '+hardFilter : 'NON-NEGOTIABLE FILTERS: none',
+        genre ? 'GENRE IS A STRONG PREFERENCE, NOT A HARD FILTER. Trust the DJ’s corrected genre when present. A scanned/catalog genre may be wrong; let this DJ’s actual event plays and requests outweigh a conflicting tag.' : '',
         'Candidate tracks from '+suggestionSource+':', JSON.stringify(candidates),
         'Return JSON with recommendations: [{title,artist,reason,move}] and no more than 8 recommendations.',
-        'Rank the best practical next-track choices first. Favor smooth BPM/genre/energy transitions. Do not invent tracks; use only candidates. Never violate a hard artist, genre, era, or search filter.'
+        'Rank the best practical next-track choices first. Favor smooth BPM/genre/energy transitions. Do not invent tracks; use only candidates. Never violate a hard artist, era, or search filter.'
       ].join('\n');
       const {plan}=await api.aiEventPlan(prompt);
       const recs=(plan?.recommendations||[]).flatMap(g=>g.songs||[]).slice(0,8);
@@ -347,7 +377,8 @@ export default function Intelligence(){
             {label}<small style={{display:'block',fontWeight:600,opacity:.62,marginTop:3}}>{sub}</small>
           </button>)}
         </div>
-        <div className="eyebrow" style={{marginTop:20}}>GENRE</div>
+        <div className="eyebrow" style={{marginTop:20}}>GENRE PREFERENCE</div>
+        <p className="hint" style={{margin:'4px 0 0'}}>Genre boosts a match; it won’t hide a track with a bad tag.</p>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
           {GENRES.map(([g,c])=><button key={g} onClick={()=>{setGenre(current=>current===g?'':g);setAi([])}} style={{minHeight:48,textAlign:'left',padding:'10px 12px',borderRadius:9,border:genre===g?'2px solid '+c:'1px solid '+c+'66',background:genre===g?c+'30':'rgba(255,255,255,.035)',color:'var(--fg)',boxShadow:genre===g?'0 0 18px '+c+'38':'none',fontWeight:800,cursor:'pointer'}}>{g}</button>)}
         </div>
@@ -370,10 +401,10 @@ export default function Intelligence(){
             <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>{mode==='dj'?'Your next-track shortlist':'Build your party playlist'}</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · {mode==='dj'?`ranked from your library, event plays and guest requests${bridge.nowPlaying?' · anchored to what is playing':''}`:'add songs, then arrange the order'}</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{mode==='dj' && ai.length?'AI RANKED':suggestionSource}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
           <div className="field" style={{marginTop:14}}><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search artist or song…" /></div>
           <div style={{display:'grid',gap:9,marginTop:12}}>
-            {display.map((s,i)=><article key={(s.title||'')+'|'+(s.artist||'')+'|'+i} style={{display:'grid',gridTemplateColumns:'44px minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'13px 14px',border:'1px solid rgba(255,255,255,.09)',borderRadius:12,background:'rgba(255,255,255,.025)'}}>
+          {display.map((s,i)=><article key={(s.title||'')+'|'+(s.artist||'')+'|'+i} style={{display:'grid',gridTemplateColumns:'44px minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'13px 14px',border:'1px solid rgba(255,255,255,.09)',borderRadius:12,background:'rgba(255,255,255,.025)'}}>
               <strong style={{fontSize:18,opacity:.65}}>{String(i+1).padStart(2,'0')}</strong>
-              <div><strong style={{display:'block'}}>{s.title}</strong><span>{s.artist}</span><small style={{display:'block',marginTop:3}}>{s.reason || [s.genre,s.era,s.bpm?s.bpm+' BPM':''].filter(Boolean).join(' · ')}</small></div>
-              <div style={{textAlign:'right'}}><b>{s.bpm ? s.bpm+' BPM' : ''}</b>{s.move && <small style={{display:'block'}}>{s.move}</small>}<div style={{display:'flex',gap:5,justifyContent:'flex-end',marginTop:5}}>{mode==='playlist' && <button className="btn btn-gold btn-sm" onClick={()=>addToPlaylist(s)} disabled={playlist.some(x=>songKey(x)===songKey(s))}>{playlist.some(x=>songKey(x)===songKey(s))?'Added':'Add'}</button>}<button className="btn btn-ghost btn-sm" onClick={()=>navigator.clipboard?.writeText((s.title||'')+' — '+(s.artist||''))}>Copy</button></div></div>
+          <div><strong style={{display:'block'}}>{s.title}</strong><span>{s.artist}</span><small style={{display:'block',marginTop:3}}>{genreOverrides[songKey(s)]?'DJ CORRECTED · '+genreOverrides[songKey(s)]:s.reason || [s.genre,s.era,s.bpm?s.bpm+' BPM':''].filter(Boolean).join(' · ')}</small>{editingGenreKey===songKey(s) && <select aria-label={`Correct genre for ${s.title}`} className="input" style={{marginTop:7,maxWidth:220}} value={genreOverrides[songKey(s)]||''} disabled={savingGenreKey===songKey(s)} onChange={e=>saveGenreCorrection(s,e.target.value)}><option value="">Use scanned genre</option>{GENRES.map(([name])=><option key={name} value={name}>{name}</option>)}</select>}</div>
+              <div style={{textAlign:'right'}}><b>{s.bpm ? s.bpm+' BPM' : ''}</b>{s.move && <small style={{display:'block'}}>{s.move}</small>}<div style={{display:'flex',gap:5,justifyContent:'flex-end',marginTop:5,flexWrap:'wrap'}}>{savingGenreKey===songKey(s)&&<small role="status">Saving…</small>}{mode==='playlist' && <button className="btn btn-gold btn-sm" onClick={()=>addToPlaylist(s)} disabled={playlist.some(x=>songKey(x)===songKey(s))}>{playlist.some(x=>songKey(x)===songKey(s))?'Added':'Add'}</button>}{s.private_library_track && <button className="btn btn-ghost btn-sm" onClick={()=>setEditingGenreKey(current=>current===songKey(s)?'':songKey(s))}>{editingGenreKey===songKey(s)?'Close':genreOverrides[songKey(s)]?'Edit genre':'Fix genre'}</button>}<button className="btn btn-ghost btn-sm" onClick={()=>navigator.clipboard?.writeText((s.title||'')+' — '+(s.artist||''))}>Copy</button></div></div>
             </article>)}
           </div>
           {!display.length && libraryBusy && <p className="hint">Checking your private SI DJ library…</p>}
@@ -413,7 +444,7 @@ export default function Intelligence(){
         <section className="panel" style={{marginTop:18}}>
           <div className="eyebrow">WHY THIS WORKS</div>
           <h2 style={{margin:'5px 0'}}>Stop digging through crates.</h2>
-          <p className="hint">The current track is the anchor. Genre, vibe and era are your performance controls. SI DJ ranks a small set of practical next-track choices so the DJ can make the final call quickly.</p>
+          <p className="hint">The current track is the anchor. Genre guides the ranking; it will not hide strong choices just because a scanned tag looks wrong. Use “Fix genre” to save your correction to your DJ account. Vibe, era and your own event plays and requests refine the list.</p>
         </section>
       </main>
     </div>

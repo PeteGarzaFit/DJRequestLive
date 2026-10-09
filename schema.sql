@@ -158,6 +158,19 @@ CREATE TABLE IF NOT EXISTS library_tracks (
   INDEX idx_library_user_title_key (user_id, title_key(120))
 ) CHARACTER SET utf8mb4;
 
+-- DJ-owned corrections for unreliable scanned genre tags.
+CREATE TABLE IF NOT EXISTS si_dj_library_genre_overrides (
+  user_id BIGINT UNSIGNED NOT NULL,
+  artist_key VARCHAR(255) NOT NULL,
+  title_key VARCHAR(255) NOT NULL,
+  artist VARCHAR(255) NOT NULL DEFAULT '',
+  title VARCHAR(255) NOT NULL,
+  genre VARCHAR(120) NOT NULL,
+  updated_at BIGINT NOT NULL,
+  PRIMARY KEY (user_id, artist_key, title_key),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) CHARACTER SET utf8mb4;
+
 -- Reserved for Stripe boosts and subscriptions later.
 CREATE TABLE IF NOT EXISTS payments (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

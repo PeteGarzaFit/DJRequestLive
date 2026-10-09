@@ -63,6 +63,16 @@ test('SI DJ recommendations learn from only this DJ’s library, event plays, an
   await addCompletedEvent(djs[0], { played: 2, requested: 3, planned: 4 });
   await addCompletedEvent(djs[1], { played: 7, requested: 0, planned: 7 });
 
+  const correctionResponse = await originalFetch(`${origin}/api/library/genre-overrides`, {
+    method: 'POST', headers: { Cookie: `rl_session=${djs[0].token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ artist: candidate.artist, title: candidate.title, genre: 'Country' }),
+  });
+  assert.equal(correctionResponse.status, 200);
+  const ownerOverrides = await originalFetch(`${origin}/api/library/genre-overrides`, { headers: { Cookie: `rl_session=${djs[0].token}` } });
+  const otherOverrides = await originalFetch(`${origin}/api/library/genre-overrides`, { headers: { Cookie: `rl_session=${djs[1].token}` } });
+  assert.equal((await ownerOverrides.json()).overrides.length, 1);
+  assert.equal((await otherOverrides.json()).overrides.length, 0, 'genre corrections stay private to the DJ');
+
   const requestUrl = new URL(`${origin}/api/si-dj/knowledge`);
   requestUrl.searchParams.set('q', candidate.title);
   requestUrl.searchParams.set('event_type', 'Wedding');
