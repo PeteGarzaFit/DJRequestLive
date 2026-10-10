@@ -21,7 +21,7 @@ const SECURITY = {
   'X-Frame-Options': 'SAMEORIGIN',
   'Content-Security-Policy':
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-    "font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
+    "font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:8765 http://localhost:8765; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
 };
 
 async function serveStatic(req, res, pathname) {
