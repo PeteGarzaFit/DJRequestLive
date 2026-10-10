@@ -138,10 +138,14 @@ export default function Intelligence({ embedded = false }){
   const loadBridge=useCallback(async()=>{
     try{
       const r=await fetch('http://127.0.0.1:8765/now-playing',{cache:'no-store'});
-      if(!r.ok) throw new Error();
-      setBridge(await r.json());
-    }catch{
-      setBridge({connected:false,source:null,nowPlaying:null,error:'Bridge offline'});
+      if(!r.ok) throw new Error('Bridge returned HTTP '+r.status);
+      const data=await r.json();
+      setBridge(data);
+      return data;
+    }catch(e){
+      const message=e?.message || 'Browser blocked the local Bridge request';
+      setBridge({connected:false,source:null,nowPlaying:null,error:'Bridge connection failed: '+message});
+      return null;
     }
   },[]);
   useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2000); return()=>clearInterval(t); },[loadBridge]);
@@ -306,7 +310,10 @@ export default function Intelligence({ embedded = false }){
         </div>}
 
     <section className="panel" style={{position:'sticky',top:10,zIndex:20,backdropFilter:'blur(18px)',background:'var(--si-sticky)',borderColor:bridge.connected?'rgba(34,197,94,.45)':'var(--si-w12)'}}>
-      <div className="eyebrow">{mode==='dj' ? (bridge.connected ? '● DJ MODE · BRIDGE CONNECTED' : 'DJ MODE · BRIDGE OFFLINE') : 'PLAYLIST MODE · BRIDGE NOT REQUIRED'}</div>
+      <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center',flexWrap:'wrap'}}>
+        <div className="eyebrow">{mode==='dj' ? (bridge.connected ? '● DJ MODE · BRIDGE CONNECTED' : 'DJ MODE · BRIDGE OFFLINE') : 'PLAYLIST MODE · BRIDGE STATUS'}</div>
+        <button className="btn btn-ghost btn-sm" onClick={loadBridge}>{bridge.connected ? 'RECHECK BRIDGE ↻' : 'CONNECT / RETRY BRIDGE ↻'}</button>
+      </div>
       <div style={{display:'flex',justifyContent:'space-between',gap:18,alignItems:'center',marginTop:7,flexWrap:'wrap'}}>
         <div><h1 style={{fontSize:26,margin:'0 0 4px'}}>{bridge.nowPlaying?.title || 'Waiting for current track'}</h1><div className="hint" style={{fontSize:15}}>{bridge.nowPlaying ? [bridge.nowPlaying.artist,bridge.nowPlaying.genre,bridge.nowPlaying.bpm ? bridge.nowPlaying.bpm+' BPM':'',bridge.nowPlaying.key].filter(Boolean).join(' · ') : bridge.error}</div></div>
         <div className="eyebrow">SOURCE<br/><strong style={{fontSize:13}}>{bridge.source || '—'}</strong></div>
