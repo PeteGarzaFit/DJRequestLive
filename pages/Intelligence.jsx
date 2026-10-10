@@ -115,7 +115,7 @@ function scoreSong(s, filters, now){
   return score;
 }
 
-export default function Intelligence(){
+export default function Intelligence({ embedded = false }){
   const [bridge,setBridge]=useState({connected:false,source:null,nowPlaying:null,error:'Checking SI DJ Bridge…'});
   const [genre,setGenre]=useState('Country');
   const [vibe,setVibe]=useState('KEEP VIBE');
@@ -144,10 +144,14 @@ export default function Intelligence(){
   const loadBridge=useCallback(async()=>{
     try{
       const r=await fetch('http://127.0.0.1:8765/now-playing',{cache:'no-store'});
-      if(!r.ok) throw new Error();
-      setBridge(await r.json());
-    }catch{
-      setBridge({connected:false,source:null,nowPlaying:null,error:'Bridge offline'});
+      if(!r.ok) throw new Error('Bridge returned HTTP '+r.status);
+      const data=await r.json();
+      setBridge(data);
+      return data;
+    }catch(e){
+      const message=e?.message || 'Browser blocked the local Bridge request';
+      setBridge({connected:false,source:null,nowPlaying:null,error:'Bridge connection failed: '+message});
+      return null;
     }
   },[]);
   useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2000); return()=>clearInterval(t); },[loadBridge]);
@@ -350,14 +354,21 @@ export default function Intelligence(){
   },[loadLibrary]);
 
   const display = displayPool.slice(0,visibleCount);
-  return <div className="rl rl-app"><div className="wrap wide">
-    <div className="shead" style={{marginBottom:12}}>
-      <Link to="/studio?tab=queue" className="brand" style={{textDecoration:'none',color:'inherit'}}><Mark size={28} badge/>DJ Request Live</Link>
-      <div className="shead-r"><Link className="mini" to="/studio?tab=queue">Studio</Link><Link className="mini" to="/bridge">Bridge</Link></div>
-    </div>
+  // Inside the Studio this renders as a tab, so it inherits the Studio's theme
+  // (dark or Outdoor) and skips its own header; /intelligence still stands alone.
+  return <div className={embedded ? 'si-embedded' : 'rl rl-app'}><div className={embedded ? undefined : 'wrap wide'}>
+    {embedded
+      ? <div className="si-embedded-bar"><Link className="mini" to="/bridge">Bridge</Link></div>
+      : <div className="shead" style={{marginBottom:12}}>
+          <Link to="/studio?tab=queue" className="brand" style={{textDecoration:'none',color:'inherit'}}><Mark size={28} badge/>DJ Request Live</Link>
+          <div className="shead-r"><Link className="mini" to="/studio?tab=queue">Studio</Link><Link className="mini" to="/bridge">Bridge</Link></div>
+        </div>}
 
-    <section className="panel" style={{position:'sticky',top:10,zIndex:20,backdropFilter:'blur(18px)',background:'rgba(14,17,24,.94)',borderColor:bridge.connected?'rgba(34,197,94,.45)':'rgba(255,255,255,.12)'}}>
-      <div className="eyebrow">{mode==='dj' ? (bridge.connected ? '● DJ MODE · BRIDGE CONNECTED' : 'DJ MODE · BRIDGE OFFLINE') : 'PLAYLIST MODE · BRIDGE NOT REQUIRED'}</div>
+    <section className="panel" style={{position:'sticky',top:10,zIndex:20,backdropFilter:'blur(18px)',background:'var(--si-sticky)',borderColor:bridge.connected?'rgba(34,197,94,.45)':'var(--si-w12)'}}>
+      <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center',flexWrap:'wrap'}}>
+        <div className="eyebrow">{mode==='dj' ? (bridge.connected ? '● DJ MODE · BRIDGE CONNECTED' : 'DJ MODE · BRIDGE OFFLINE') : 'PLAYLIST MODE · BRIDGE STATUS'}</div>
+        <button className="btn btn-ghost btn-sm" onClick={loadBridge}>{bridge.connected ? 'RECHECK BRIDGE ↻' : 'CONNECT / RETRY BRIDGE ↻'}</button>
+      </div>
       <div style={{display:'flex',justifyContent:'space-between',gap:18,alignItems:'center',marginTop:7,flexWrap:'wrap'}}>
         <div><h1 style={{fontSize:26,margin:'0 0 4px'}}>{bridge.nowPlaying?.title || 'Waiting for current track'}</h1><div className="hint" style={{fontSize:15}}>{bridge.nowPlaying ? [bridge.nowPlaying.artist,bridge.nowPlaying.genre,bridge.nowPlaying.bpm ? bridge.nowPlaying.bpm+' BPM':'',bridge.nowPlaying.key].filter(Boolean).join(' · ') : bridge.error}</div></div>
         <div className="eyebrow">SOURCE<br/><strong style={{fontSize:13}}>{bridge.source || '—'}</strong></div>
@@ -369,26 +380,26 @@ export default function Intelligence(){
         <div className="eyebrow">SUPER INTELLIGENCE DJ</div>
         <h2 style={{margin:'6px 0 4px'}}>{mode==='dj'?'DJ MODE':'PLAYLIST MODE'}</h2>
         <p className="hint" style={{marginTop:0}}>{mode==='dj'?'Live next-track intelligence. The Bridge is optional, but when connected it anchors recommendations to what is playing now.':'Build a party playlist without a DJ setup or Bridge. Add tracks below, then reorder them into the exact flow you want.'}</p>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginTop:14,padding:4,borderRadius:10,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.10)'}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginTop:14,padding:4,borderRadius:10,background:'var(--si-w05)',border:'1px solid var(--si-w10)'}}>
           {[
             ['playlist','PLAYLIST MODE','No Bridge required'],
             ['dj','DJ MODE',bridge.connected?'Bridge connected':'Bridge optional']
-          ].map(([key,label,sub])=><button key={key} onClick={()=>setMode(key)} style={{padding:'10px 8px',borderRadius:7,border:mode===key?'1px solid var(--accent)':'1px solid transparent',background:mode===key?'rgba(255,255,255,.10)':'transparent',color:'var(--fg)',cursor:'pointer',fontWeight:900}}>
+          ].map(([key,label,sub])=><button key={key} onClick={()=>setMode(key)} style={{padding:'10px 8px',borderRadius:7,border:mode===key?'1px solid var(--accent)':'1px solid transparent',background:mode===key?'var(--si-w10)':'transparent',color:'var(--fg)',cursor:'pointer',fontWeight:900}}>
             {label}<small style={{display:'block',fontWeight:600,opacity:.62,marginTop:3}}>{sub}</small>
           </button>)}
         </div>
         <div className="eyebrow" style={{marginTop:20}}>GENRE PREFERENCE</div>
         <p className="hint" style={{margin:'4px 0 0'}}>Genre boosts a match; it won’t hide a track with a bad tag.</p>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
-          {GENRES.map(([g,c])=><button key={g} onClick={()=>{setGenre(current=>current===g?'':g);setAi([])}} style={{minHeight:48,textAlign:'left',padding:'10px 12px',borderRadius:9,border:genre===g?'2px solid '+c:'1px solid '+c+'66',background:genre===g?c+'30':'rgba(255,255,255,.035)',color:'var(--fg)',boxShadow:genre===g?'0 0 18px '+c+'38':'none',fontWeight:800,cursor:'pointer'}}>{g}</button>)}
+          {GENRES.map(([g,c])=><button key={g} onClick={()=>{setGenre(current=>current===g?'':g);setAi([])}} style={{minHeight:48,textAlign:'left',padding:'10px 12px',borderRadius:9,border:genre===g?'2px solid '+c:'1px solid '+c+'66',background:genre===g?c+'30':'var(--si-w035)',color:'var(--fg)',boxShadow:genre===g?'0 0 18px '+c+'38':'none',fontWeight:800,cursor:'pointer'}}>{g}</button>)}
         </div>
         <div className="eyebrow" style={{marginTop:22}}>VIBE / MOVE</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
-          {VIBES.map(([v,c])=><button key={v} onClick={()=>{setVibe(v);setAi([])}} style={{minHeight:44,padding:'9px 10px',borderRadius:9,border:vibe===v?'2px solid '+c:'1px solid '+c+'55',background:vibe===v?c+'28':'rgba(255,255,255,.035)',color:'var(--fg)',boxShadow:vibe===v?'0 0 16px '+c+'35':'none',fontWeight:800,cursor:'pointer'}}>{v}</button>)}
+          {VIBES.map(([v,c])=><button key={v} onClick={()=>{setVibe(v);setAi([])}} style={{minHeight:44,padding:'9px 10px',borderRadius:9,border:vibe===v?'2px solid '+c:'1px solid '+c+'55',background:vibe===v?c+'28':'var(--si-w035)',color:'var(--fg)',boxShadow:vibe===v?'0 0 16px '+c+'35':'none',fontWeight:800,cursor:'pointer'}}>{v}</button>)}
         </div>
         <div className="eyebrow" style={{marginTop:22}}>ERA</div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginTop:8}}>
-          {ERAS.map(e=><button key={e} onClick={()=>{setEra(e);setAi([])}} style={{padding:'10px 5px',borderRadius:8,border:era===e?'2px solid var(--accent)':'1px solid rgba(255,255,255,.12)',background:era===e?'rgba(255,255,255,.10)':'rgba(255,255,255,.03)',color:'var(--fg)',fontSize:11,fontWeight:800,cursor:'pointer'}}>{e}</button>)}
+          {ERAS.map(e=><button key={e} onClick={()=>{setEra(e);setAi([])}} style={{padding:'10px 5px',borderRadius:8,border:era===e?'2px solid var(--accent)':'1px solid var(--si-w12)',background:era===e?'var(--si-w10)':'var(--si-w03)',color:'var(--fg)',fontSize:11,fontWeight:800,cursor:'pointer'}}>{e}</button>)}
         </div>
         {spotifyConnected
           ? <button className="btn btn-ghost btn-block" style={{marginTop:18}} onClick={findSpotify} disabled={spotifyBusy}>{spotifyBusy?'Searching Spotify…':'Search live Spotify catalog'}</button>
@@ -401,7 +412,7 @@ export default function Intelligence(){
             <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>{mode==='dj'?'Your next-track shortlist':'Build your party playlist'}</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · {mode==='dj'?`ranked from your library, event plays and guest requests${bridge.nowPlaying?' · anchored to what is playing':''}`:'add songs, then arrange the order'}</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{mode==='dj' && ai.length?'AI RANKED':suggestionSource}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
           <div className="field" style={{marginTop:14}}><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search artist or song…" /></div>
           <div style={{display:'grid',gap:9,marginTop:12}}>
-          {display.map((s,i)=><article key={(s.title||'')+'|'+(s.artist||'')+'|'+i} style={{display:'grid',gridTemplateColumns:'44px minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'13px 14px',border:'1px solid rgba(255,255,255,.09)',borderRadius:12,background:'rgba(255,255,255,.025)'}}>
+            {display.map((s,i)=><article key={(s.title||'')+'|'+(s.artist||'')+'|'+i} style={{display:'grid',gridTemplateColumns:'44px minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'13px 14px',border:'1px solid var(--si-w09)',borderRadius:12,background:'var(--si-w025)'}}>
               <strong style={{fontSize:18,opacity:.65}}>{String(i+1).padStart(2,'0')}</strong>
           <div><strong style={{display:'block'}}>{s.title}</strong><span>{s.artist}</span><small style={{display:'block',marginTop:3}}>{genreOverrides[songKey(s)]?'DJ CORRECTED · '+genreOverrides[songKey(s)]:s.reason || [s.genre,s.era,s.bpm?s.bpm+' BPM':''].filter(Boolean).join(' · ')}</small>{editingGenreKey===songKey(s) && <select aria-label={`Correct genre for ${s.title}`} className="input" style={{marginTop:7,maxWidth:220}} value={genreOverrides[songKey(s)]||''} disabled={savingGenreKey===songKey(s)} onChange={e=>saveGenreCorrection(s,e.target.value)}><option value="">Use scanned genre</option>{GENRES.map(([name])=><option key={name} value={name}>{name}</option>)}</select>}</div>
               <div style={{textAlign:'right'}}><b>{s.bpm ? s.bpm+' BPM' : ''}</b>{s.move && <small style={{display:'block'}}>{s.move}</small>}<div style={{display:'flex',gap:5,justifyContent:'flex-end',marginTop:5,flexWrap:'wrap'}}>{savingGenreKey===songKey(s)&&<small role="status">Saving…</small>}{mode==='playlist' && <button className="btn btn-gold btn-sm" onClick={()=>addToPlaylist(s)} disabled={playlist.some(x=>songKey(x)===songKey(s))}>{playlist.some(x=>songKey(x)===songKey(s))?'Added':'Add'}</button>}{s.private_library_track && <button className="btn btn-ghost btn-sm" onClick={()=>setEditingGenreKey(current=>current===songKey(s)?'':songKey(s))}>{editingGenreKey===songKey(s)?'Close':genreOverrides[songKey(s)]?'Edit genre':'Fix genre'}</button>}<button className="btn btn-ghost btn-sm" onClick={()=>navigator.clipboard?.writeText((s.title||'')+' — '+(s.artist||''))}>Copy</button></div></div>
@@ -418,9 +429,9 @@ export default function Intelligence(){
             <div><div className="eyebrow">MY PARTY PLAYLIST</div><h2 style={{margin:'5px 0 0'}}>{playlist.length} TRACKS</h2><p className="hint" style={{marginTop:4}}>{playlistReady?'Saved separately for each DJ account on this device. Drag or use the arrows to reorder.':'Loading this DJ’s saved playlist…'}</p></div>
             {playlist.length>0 && <button className="btn btn-ghost btn-sm" onClick={clearPlaylist}>CLEAR</button>}
           </div>
-          {!playlist.length && <div style={{padding:'22px 8px',textAlign:'center',border:'1px dashed rgba(255,255,255,.14)',borderRadius:10,marginTop:12}}><strong>Your playlist is empty</strong><p className="hint" style={{margin:'5px 0 0'}}>Click ADD on any SI DJ suggestion above.</p></div>}
+          {!playlist.length && <div style={{padding:'22px 8px',textAlign:'center',border:'1px dashed var(--si-w14)',borderRadius:10,marginTop:12}}><strong>Your playlist is empty</strong><p className="hint" style={{margin:'5px 0 0'}}>Click ADD on any SI DJ suggestion above.</p></div>}
           <div style={{display:'grid',gap:7,marginTop:12}}>
-            {playlist.map((s,i)=><div key={songKey(s)+'|'+i} draggable onDragStart={()=>setDragIndex(i)} onDragOver={e=>e.preventDefault()} onDrop={()=>{if(dragIndex!==null) movePlaylistItem(dragIndex,i);setDragIndex(null)}} style={{display:'grid',gridTemplateColumns:'34px minmax(0,1fr) auto',gap:9,alignItems:'center',padding:'10px 11px',border:'1px solid rgba(255,255,255,.09)',borderRadius:9,background:dragIndex===i?'rgba(255,255,255,.09)':'rgba(255,255,255,.025)',cursor:'grab'}}>
+            {playlist.map((s,i)=><div key={songKey(s)+'|'+i} draggable onDragStart={()=>setDragIndex(i)} onDragOver={e=>e.preventDefault()} onDrop={()=>{if(dragIndex!==null) movePlaylistItem(dragIndex,i);setDragIndex(null)}} style={{display:'grid',gridTemplateColumns:'34px minmax(0,1fr) auto',gap:9,alignItems:'center',padding:'10px 11px',border:'1px solid var(--si-w09)',borderRadius:9,background:dragIndex===i?'var(--si-w09)':'var(--si-w025)',cursor:'grab'}}>
               <strong style={{opacity:.55}}>{String(i+1).padStart(2,'0')}</strong>
               <div><strong>{s.title}</strong><span style={{display:'block',opacity:.72}}>{s.artist}</span></div>
               <div style={{display:'flex',gap:4,alignItems:'center'}}>
@@ -435,7 +446,7 @@ export default function Intelligence(){
           <div className="eyebrow">LIVE SPOTIFY CATALOG · PRIVATE LIBRARY MATCH</div>
           <h2 style={{margin:'5px 0'}}>Catalog candidates and available versions</h2>
           <p className="hint">Spotify is queried live for this search. Only a private library match confirms a local copy; catalog results are not saved or used for training.</p>
-          <div style={{display:'grid',gap:9,marginTop:12}}>{spotifyCandidates.map(s=><article key={s.id} style={{padding:'13px 14px',border:'1px solid rgba(255,255,255,.09)',borderRadius:12}}>
+          <div style={{display:'grid',gap:9,marginTop:12}}>{spotifyCandidates.map(s=><article key={s.id} style={{padding:'13px 14px',border:'1px solid var(--si-w09)',borderRadius:12}}>
             <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'start'}}><div><strong>{s.title}</strong><span style={{display:'block'}}>{s.artist}{s.album?' · '+s.album:''}</span></div><span className="ai-pill" style={{whiteSpace:'nowrap'}}>{s.owned?'IN YOUR LIBRARY':'CATALOG ONLY'}</span></div>
             {s.versions?.length>0 && <div style={{marginTop:9,display:'grid',gap:4}}>{s.versions.map((v,i)=><small key={i}>{v.title} — {v.artist}{v.album?' · '+v.album:''}{v.file_type?' · '+v.file_type.toUpperCase():''}{v.bpm?' · '+v.bpm+' BPM':''}{v.genre?' · '+v.genre:''}</small>)}</div>}
             <div style={{marginTop:8,display:'flex',gap:12,alignItems:'center'}}><small>{s.owned?`${s.versions.length} matching local ${s.versions.length===1?'version':'versions'}`:'No exact title and artist match in the scanned library.'}</small>{s.url&&<a href={s.url} target="_blank" rel="noreferrer">Open Spotify</a>}</div>
