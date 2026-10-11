@@ -37,9 +37,12 @@ try {
   try { parsedUrl = new URL(cloudUrl); } catch { throw new Error('That cloud URL is not valid.'); }
   if (parsedUrl.protocol !== 'https:') throw new Error('Cloud URL must start with https://');
 
-  const token = (await rl.question('Paste the NEW pairing token from Studio (64 hex characters): ')).trim();
-  if (!/^[a-f0-9]{64}$/i.test(token)) {
-    throw new Error('Pairing token must be exactly 64 hexadecimal characters. Generate a fresh token in Studio and run this command again.');
+  const pastedToken = (await rl.question('Paste the NEW pairing token from Studio (you may paste the whole token line): ')).trim();
+  // Accept a raw token, surrounding quotes, or a copied JSON token field.
+  const matches = pastedToken.match(/[a-f0-9]{64}/ig) || [];
+  const token = matches.length === 1 ? matches[0] : '';
+  if (!token) {
+    throw new Error('I could not find exactly one 64-character pairing token in that paste. Generate a fresh token in Studio, copy only the token value, and run this command again.');
   }
 
   config.source = config.source || 'virtualdj-history';
