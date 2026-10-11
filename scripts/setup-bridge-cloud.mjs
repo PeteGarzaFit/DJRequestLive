@@ -37,26 +37,10 @@ try {
   try { parsedUrl = new URL(cloudUrl); } catch { throw new Error('That cloud URL is not valid.'); }
   if (parsedUrl.protocol !== 'https:') throw new Error('Cloud URL must start with https://');
 
-  console.log('Paste the NEW token value OR the whole JSON block copied from Studio.');
-  let pastedToken = (await rl.question('Pairing token: ')).trim();
-  // Terminal line prompts normally capture only the first line of a multiline paste.
-  // If the user pasted a JSON block, collect subsequent lines until the token is present.
-  while (!/[a-f0-9]{64}/i.test(pastedToken)) {
-    if (!pastedToken || pastedToken === '{' || pastedToken.includes('"cloud"') || pastedToken.includes('"url"')) {
-      try {
-        pastedToken += '\\n' + (await rl.question(''));
-      } catch {
-        break;
-      }
-    } else {
-      break;
-    }
-  }
-  // Accept a raw token, surrounding quotes, a single-line token field, or a pasted JSON block.
-  const matches = pastedToken.match(/[a-f0-9]{64}/ig) || [];
-  const token = matches.length === 1 ? matches[0] : '';
-  if (!token) {
-    throw new Error('Could not find exactly one 64-character pairing token. Run setup again and paste the token value or the full JSON block from Studio.');
+  console.log('Enter the token from Studio. Paste just the 64-character token value, not the JSON or URL.');
+  const token = (await rl.question('Pairing token: ')).trim().replace(/^["']|["']$/g, '');
+  if (!/^[a-f0-9]{64}$/i.test(token)) {
+    throw new Error('Token input must be exactly 64 hexadecimal characters. Paste only the value shown after "token": in Studio.');
   }
 
   config.source = config.source || 'virtualdj-history';
