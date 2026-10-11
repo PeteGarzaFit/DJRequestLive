@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline/promises';
+import { execFileSync } from 'node:child_process';
 import { stdin as input, stdout as output } from 'node:process';
 
 const root = process.cwd();
@@ -37,10 +38,22 @@ try {
   try { parsedUrl = new URL(cloudUrl); } catch { throw new Error('That cloud URL is not valid.'); }
   if (parsedUrl.protocol !== 'https:') throw new Error('Cloud URL must start with https://');
 
-  console.log('Enter the token from Studio. Paste just the 64-character token value, not the JSON or URL.');
-  const token = (await rl.question('Pairing token: ')).trim().replace(/^["']|["']$/g, '');
-  if (!/^[a-f0-9]{64}$/i.test(token)) {
-    throw new Error('Token input must be exactly 64 hexadecimal characters. Paste only the value shown after "token": in Studio.');
+  console.log('\\nTOKEN SETUP:');
+  console.log('1. In Studio, generate a NEW pairing token.');
+  console.log('2. Use Studio’s Copy button, or select and copy the full pairing/config block.');
+  console.log('3. Return here and press Enter. Do NOT paste the block into Terminal.');
+  await rl.question('Press Enter when the token/block is copied to your Mac clipboard: ');
+
+  let clipboard = '';
+  try {
+    clipboard = execFileSync('pbpaste', { encoding: 'utf8' });
+  } catch {
+    throw new Error('Could not read the Mac clipboard. Copy the pairing block again and retry.');
+  }
+  const matches = clipboard.match(/[a-f0-9]{64}/ig) || [];
+  const token = matches.length === 1 ? matches[0] : '';
+  if (!token) {
+    throw new Error('I could not find exactly one 64-character token in the clipboard. Copy the NEW token or full config block in Studio, then run setup again.');
   }
 
   config.source = config.source || 'virtualdj-history';
