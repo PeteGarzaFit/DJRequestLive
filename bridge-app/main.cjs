@@ -20,11 +20,42 @@ if (!gotSingleInstanceLock) {
     try { app.setAsDefaultProtocolClient(PROTOCOL); } catch (e) { console.error('[Protocol registration]', e); }
   }
 
-  function handleProtocolUrl(url) {
+  async function handleProtocolUrl(url) {
     if (!url || !url.startsWith(PROTOCOL + '://')) return;
     pendingProtocolUrl = null;
     if (win) { win.show(); win.focus(); }
-    startBridge();
+    let parsed;
+    try { parsed = new URL(url); } catch { startBridge(); return; }
+    const ticket = parsed.searchParams.get('ticket');
+    if (!ticket) { startBridge(); return; }
+    const cloudUrl = String(parsed.searchParams.get('cloudUrl') || 'https://djrequestlive.com').replace(/\/$/, '');
+    if (!/^https:\/\/(djrequestlive\.com|www\.djrequestlive\.com)$/i.test(cloudUrl)) {
+      win?.webContents.send('bridge:pairing-result', { ok: false, message: 'Unrecognized DJ Request Live address.' });
+      return;
+    }
+    try {
+      const response = await fetch(cloudUrl + '/api/si-dj/bridge-pairing-ticket/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.token) throw new Error(result.error || 'Pairing link expired. Return to DJ Request Live and click Connect again.');
+      ensureConfig();
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      config.cloud = { url: cloudUrl, token: result.token };
+      const tempPath = configPath + '.tmp';
+      fs.writeFileSync(tempPath, JSON.stringify(config, null, 2) + '\\n', { mode: 0o600 });
+      fs.renameSync(tempPath, configPath);
+      try { fs.chmodSync(configPath, 0o600); } catch {}
+      stopBridge();
+      setTimeout(() => {
+        startBridge();
+        win?.webContents.send('bridge:pairing-result', { ok: true, message: 'Connected to DJ Request Live. Your Bridge is paired.' });
+      }, 800);
+    } catch (error) {
+      win?.webContents.send('bridge:pairing-result', { ok: false, message: error?.message || 'Pairing failed. Try again from DJ Request Live.' });
+    }
   }
 
   function defaultConfig() {
