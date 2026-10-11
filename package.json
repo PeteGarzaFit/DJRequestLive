@@ -15,6 +15,7 @@
     "start": "node server.js",
     "preview": "vite preview",
     "bridge": "node bridge/server.mjs",
+    "bridge:setup": "node scripts/setup-bridge-cloud.mjs",
     "bridge:app": "electron bridge-app/main.cjs",
     "bridge:package": "electron-builder --mac",
     "bridge:check": "node --check bridge/server.mjs && node --check bridge-app/main.cjs && node --check bridge-app/preload.cjs",
