@@ -38,7 +38,7 @@ try {
   try { parsedUrl = new URL(cloudUrl); } catch { throw new Error('That cloud URL is not valid.'); }
   if (parsedUrl.protocol !== 'https:') throw new Error('Cloud URL must start with https://');
 
-  console.log('\\nTOKEN SETUP:');
+  console.log('\nTOKEN SETUP:');
   console.log('1. In Studio, generate a NEW pairing token.');
   console.log('2. Use Studio’s Copy button, or select and copy the full pairing/config block.');
   console.log('3. Return here and press Enter. Do NOT paste the block into Terminal.');
