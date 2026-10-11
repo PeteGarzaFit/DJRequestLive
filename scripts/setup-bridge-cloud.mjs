@@ -57,7 +57,7 @@ try {
   try { fs.chmodSync(configPath, 0o600); } catch {}
 
   console.log('\nSaved and validated ' + path.relative(root, configPath) + '.');
-  console.log('The Bridge checks this file automatically. Wait a few seconds, then check Studio for a connected Bridge.');
+  console.log('Config saved. Because you just pulled new Bridge code, restart the Bridge once: stop its old Terminal process with Control+C, then run npm run bridge.');
   console.log('For safety, the token was not printed back to the screen.');
 } catch (error) {
   console.error('\nSetup stopped: ' + (error?.message || error));
