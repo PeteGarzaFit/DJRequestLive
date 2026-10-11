@@ -37,12 +37,26 @@ try {
   try { parsedUrl = new URL(cloudUrl); } catch { throw new Error('That cloud URL is not valid.'); }
   if (parsedUrl.protocol !== 'https:') throw new Error('Cloud URL must start with https://');
 
-  const pastedToken = (await rl.question('Paste the NEW pairing token from Studio (you may paste the whole token line): ')).trim();
-  // Accept a raw token, surrounding quotes, or a copied JSON token field.
+  console.log('Paste the NEW token value OR the whole JSON block copied from Studio.');
+  let pastedToken = (await rl.question('Pairing token: ')).trim();
+  // Terminal line prompts normally capture only the first line of a multiline paste.
+  // If the user pasted a JSON block, collect subsequent lines until the token is present.
+  while (!/[a-f0-9]{64}/i.test(pastedToken)) {
+    if (!pastedToken || pastedToken === '{' || pastedToken.includes('"cloud"') || pastedToken.includes('"url"')) {
+      try {
+        pastedToken += '\\n' + (await rl.question(''));
+      } catch {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+  // Accept a raw token, surrounding quotes, a single-line token field, or a pasted JSON block.
   const matches = pastedToken.match(/[a-f0-9]{64}/ig) || [];
   const token = matches.length === 1 ? matches[0] : '';
   if (!token) {
-    throw new Error('I could not find exactly one 64-character pairing token in that paste. Generate a fresh token in Studio, copy only the token value, and run this command again.');
+    throw new Error('Could not find exactly one 64-character pairing token. Run setup again and paste the token value or the full JSON block from Studio.');
   }
 
   config.source = config.source || 'virtualdj-history';
