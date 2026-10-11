@@ -388,3 +388,14 @@ CREATE TABLE IF NOT EXISTS si_dj_bridge_state (
   updated_at BIGINT NOT NULL DEFAULT 0,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) CHARACTER SET utf8mb4;
+
+
+-- Short-lived one-time pairing tickets for desktop Bridge auto-configuration.
+CREATE TABLE IF NOT EXISTS si_dj_bridge_pairing_tickets (
+  ticket_hash CHAR(64) NOT NULL PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  expires_at BIGINT NOT NULL,
+  claimed_at BIGINT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_si_dj_bridge_pairing_expiry (expires_at)
+) CHARACTER SET utf8mb4;
