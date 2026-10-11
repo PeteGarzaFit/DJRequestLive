@@ -80,6 +80,21 @@ function ping() {
 export default function Studio() {
   const nav = useNavigate(); const location = useLocation(); const [dj, setDj] = useState(null); const [fail, setFail] = useState(false);
   const [outdoorMode, setOutdoorMode] = useState(() => { try { return localStorage.getItem('rl.outdoor') === '1'; } catch { return false; } });
+  const [studioBridgeConnected, setStudioBridgeConnected] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const checkBridge = async () => {
+      try {
+        const remote = await api.siDjBridge();
+        if (alive) setStudioBridgeConnected(!!remote?.connected);
+      } catch {
+        if (alive) setStudioBridgeConnected(false);
+      }
+    };
+    checkBridge();
+    const id = setInterval(checkBridge, 3000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
   const toggleOutdoor = () => setOutdoorMode((v) => { const n = !v; try { localStorage.setItem('rl.outdoor', n ? '1' : '0'); } catch { /* ignore */ } return n; });
   const requestedTab = new URLSearchParams(location.search).get('tab');
   const storedTab = (() => { try { return sessionStorage.getItem('rl.tab') || 'queue'; } catch { return 'queue'; } })();
@@ -161,7 +176,7 @@ export default function Studio() {
   return (
     <div className={"rl rl-app" + (outdoorMode ? " outdoor-mode" : "")}><div className="wrap wide">
       <div className="shead"><Link to="/" className="brand" style={{ textDecoration: 'none', color: 'inherit' }}><Mark size={28} badge />DJ Request Live</Link>
-        <div className="shead-r"><Link to="/plans" className="mini">My plans</Link><button className={"outdoor-toggle" + (outdoorMode ? " active" : "")} onClick={toggleOutdoor} aria-pressed={outdoorMode} title="High-contrast mode for bright outdoor sunlight">{outdoorMode ? "☀ Outdoor" : "☾ Dark"}</button><label className="golive" htmlFor="golive"><input type="checkbox" id="golive" checked={!!dj.is_live} onChange={(e) => { edit({ is_live: e.target.checked }); setTimeout(saveNow, 0); }} />{dj.is_live ? 'Taking requests' : 'Paused'}</label><div className="studio-profile-menu" ref={settingsMenuRef}><button type="button" className="mini" aria-label="Profile and settings" aria-haspopup="menu" aria-expanded={settingsOpen} onClick={() => setSettingsOpen(value => !value)}>Profile &amp; settings</button>{settingsOpen && <div className="studio-profile-menu-list" role="menu" aria-label="Profile and settings">{PROFILE_TABS.map(([key, label]) => <button type="button" role="menuitem" key={key} aria-current={tab === key ? 'page' : undefined} onClick={() => goProfileTab(key)}>{label}</button>)}<span className="studio-profile-menu-divider" /><button type="button" role="menuitem" className="studio-profile-logout" onClick={() => { setSettingsOpen(false); logout(); }}>Log out</button></div>}</div></div>
+        <div className="shead-r"><Link to="/plans" className="mini">My plans</Link><button className={"outdoor-toggle" + (outdoorMode ? " active" : "")} onClick={toggleOutdoor} aria-pressed={outdoorMode} title="High-contrast mode for bright outdoor sunlight">{outdoorMode ? "☀ Outdoor" : "☾ Dark"}</button><span title={studioBridgeConnected ? "SI DJ Bridge connected" : "SI DJ Bridge offline"} aria-label={studioBridgeConnected ? "SI DJ Bridge connected" : "SI DJ Bridge offline"} style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, whiteSpace:"nowrap" }}><i style={{ display:"inline-block", width:9, height:9, borderRadius:"50%", background:studioBridgeConnected ? "#16a34a" : "#dc2626", boxShadow:studioBridgeConnected ? "0 0 8px rgba(22,163,74,.55)" : "none" }} />Bridge {studioBridgeConnected ? "Connected" : "Offline"}</span><label className="golive" htmlFor="golive"><input type="checkbox" id="golive" checked={!!dj.is_live} onChange={(e) => { edit({ is_live: e.target.checked }); setTimeout(saveNow, 0); }} />{dj.is_live ? 'Taking requests' : 'Paused'}</label><div className="studio-profile-menu" ref={settingsMenuRef}><button type="button" className="mini" aria-label="Profile and settings" aria-haspopup="menu" aria-expanded={settingsOpen} onClick={() => setSettingsOpen(value => !value)}>Profile &amp; settings</button>{settingsOpen && <div className="studio-profile-menu-list" role="menu" aria-label="Profile and settings">{PROFILE_TABS.map(([key, label]) => <button type="button" role="menuitem" key={key} aria-current={tab === key ? 'page' : undefined} onClick={() => goProfileTab(key)}>{label}</button>)}<span className="studio-profile-menu-divider" /><button type="button" role="menuitem" className="studio-profile-logout" onClick={() => { setSettingsOpen(false); logout(); }}>Log out</button></div>}</div></div>
       </div>
       <div className="tabs" role="tablist" aria-label="Main Studio sections">{MAIN_TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => goTab(k)}>{l}</button>)}</div>
       {tab === 'intelligence' && <Intelligence embedded />}{tab === 'queue' && <QueueTab goTab={goTab} />}{tab === 'planner' && <Planner />}{tab === 'page' && <PageTab dj={dj} edit={edit} saved={saved} goTab={goTab} />}{tab === 'design' && <DesignTab dj={dj} edit={edit} saved={saved} mergeMedia={mergeMedia} goTab={goTab} />}{tab === 'share' && <ShareTab dj={dj} />}
@@ -181,11 +196,18 @@ function SIDJCommandCenter({ reqs }) {
 
   const loadBridge = useCallback(async () => {
     try {
-      const r = await fetch('http://127.0.0.1:8765/now-playing', { cache: 'no-store' });
-      if (!r.ok) throw new Error('Bridge HTTP ' + r.status);
-      setBridge(await r.json());
+      const remote = await api.siDjBridge();
+      const data = remote?.state || {
+        connected: false, source: null, nowPlaying: null,
+        error: remote?.paired ? 'Bridge is paired but not sending data yet' : 'Pair your Mac Bridge to this DJ account'
+      };
+      setBridge({
+        ...data,
+        connected: !!remote?.connected,
+        error: remote?.connected ? null : (data.error || 'Bridge offline or reconnecting')
+      });
     } catch {
-      setBridge({ connected: false, source: null, nowPlaying: null, error: 'Bridge offline' });
+      setBridge({ connected: false, source: null, nowPlaying: null, error: 'Cloud connection failed' });
     }
   }, []);
 
