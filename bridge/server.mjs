@@ -26,6 +26,10 @@ function out(res, status, body) {
 }
 
 function defaultVdjHistoryFile() {
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+    return path.join(localAppData, 'VirtualDJ', 'History', 'tracklist.txt');
+  }
   return path.join(os.homedir(), 'Library', 'Application Support', 'VirtualDJ', 'History', 'tracklist.txt');
 }
 

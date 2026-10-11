@@ -31,7 +31,9 @@ if (!gotSingleInstanceLock) {
     return {
       source: 'virtualdj-history',
       virtualdjHistory: {
-        historyFile: path.join(os.homedir(), 'Library', 'Application Support', 'VirtualDJ', 'History', 'tracklist.txt')
+        historyFile: process.platform === 'win32'
+          ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'VirtualDJ', 'History', 'tracklist.txt')
+          : path.join(os.homedir(), 'Library', 'Application Support', 'VirtualDJ', 'History', 'tracklist.txt')
       },
       rekordbox: { historyFile: '' }
     };
@@ -47,14 +49,9 @@ if (!gotSingleInstanceLock) {
 
     try {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      const actualVdjHistory = path.join(
-        os.homedir(),
-        'Library',
-        'Application Support',
-        'VirtualDJ',
-        'History',
-        'tracklist.txt'
-      );
+      const actualVdjHistory = process.platform === 'win32'
+        ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'VirtualDJ', 'History', 'tracklist.txt')
+        : path.join(os.homedir(), 'Library', 'Application Support', 'VirtualDJ', 'History', 'tracklist.txt');
       const configuredHistory = config.virtualdjHistory?.historyFile;
       const needsMigration =
         config.source === 'virtualdj' ||
