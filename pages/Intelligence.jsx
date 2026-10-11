@@ -159,8 +159,13 @@ export default function Intelligence({ embedded = false }){
   useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2500); return()=>clearInterval(t); },[loadBridge]);
   const createBridgePairing=async()=>{
     setBridgePairingBusy(true);
-    try{ const result=await api.siDjBridgeToken(); setBridgePairing(result); toast('Bridge pairing token created. Add it to your Mac config.'); }
-    catch(e){ toast(errorText(e)); }
+    try{
+      const result=await api.siDjBridgePairingTicket();
+      const link='sidj-bridge://connect?ticket='+encodeURIComponent(result.ticket)+'&cloudUrl='+encodeURIComponent(window.location.origin);
+      toast('Opening SI DJ Bridge to finish secure pairing…');
+      window.location.href=link;
+      setBridgePairing({started:true});
+    }catch(e){ toast(errorText(e)); }
     finally{setBridgePairingBusy(false);}
   };
   useEffect(()=>{ api.spotifyStatus().then(s=>setSpotifyConnected(!!s.connected)).catch(()=>{}); },[]);
@@ -423,13 +428,9 @@ export default function Intelligence({ embedded = false }){
             <h3 style={{margin:'0 0 6px'}}>Remote SI DJ Bridge</h3>
             <p className="hint" style={{margin:0}}>{bridgeRemote?.connected ? 'Connected to your Mac Bridge · works across Wi-Fi, cellular and hotspot.' : bridgeRemote?.paired ? 'Paired, but no recent heartbeat. Check that the Bridge is running on your Mac.' : 'Pair the Mac Bridge once so this page works on your iPhone and iPad from any network.'}</p>
           </div>
-          <button className="btn" type="button" onClick={createBridgePairing} disabled={bridgePairingBusy}>{bridgePairingBusy?'Creating…':'Generate pairing token'}</button>
+          <button className="btn" type="button" onClick={createBridgePairing} disabled={bridgePairingBusy}>{bridgePairingBusy?'Opening Bridge…':'Connect Bridge automatically'}</button>
         </div>
-        {bridgePairing?.token && <div style={{marginTop:14}}>
-          <p className="hint">On your Mac, open <code>~/DJRequestLive/bridge/config.json</code> and add this top-level cloud section. Keep the token private.</p>
-          <pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',padding:12,borderRadius:8,background:'var(--panel-2, #111827)',color:'inherit'}}>{JSON.stringify({cloud:{url:bridgePairing.config.cloudUrl,token:bridgePairing.token}},null,2)}</pre>
-          <button className="btn" type="button" onClick={()=>{navigator.clipboard?.writeText(JSON.stringify({cloud:{url:bridgePairing.config.cloudUrl,token:bridgePairing.token}},null,2));toast('Cloud config copied');}}>Copy cloud config</button>
-        </div>}
+        {bridgePairing?.started && <p className="hint" role="status" style={{marginTop:12}}>Pairing link sent to SI DJ Bridge. Approve opening the desktop app if your browser asks. This one-time link expires in 5 minutes.</p>}
       </section>
       <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>{mode==='dj'?'Your next-track shortlist':'Build your party playlist'}</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · {mode==='dj'?`ranked from your library, event plays and guest requests${bridge.nowPlaying?' · anchored to what is playing':''}`:'add songs, then arrange the order'}</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{mode==='dj' && ai.length?'AI RANKED':suggestionSource}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
           <div className="field" style={{marginTop:14}}><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search artist or song…" /></div>
