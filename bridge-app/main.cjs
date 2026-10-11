@@ -45,7 +45,7 @@ if (!gotSingleInstanceLock) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       config.cloud = { url: cloudUrl, token: result.token };
       const tempPath = configPath + '.tmp';
-      fs.writeFileSync(tempPath, JSON.stringify(config, null, 2) + '\\n', { mode: 0o600 });
+      fs.writeFileSync(tempPath, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
       fs.renameSync(tempPath, configPath);
       try { fs.chmodSync(configPath, 0o600); } catch {}
       stopBridge();
