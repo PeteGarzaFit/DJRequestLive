@@ -195,7 +195,7 @@ CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_track_played ON si_dj_event_me
 CREATE INDEX IF NOT EXISTS idx_si_dj_event_memory_track_requests ON si_dj_event_memory_tracks(request_count);
 
 
-CREATE TABLE si_dj_bridge_state (
+CREATE TABLE IF NOT EXISTS si_dj_bridge_state (
   user_id INTEGER NOT NULL PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NULL,
   state_json TEXT NULL,
