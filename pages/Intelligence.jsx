@@ -117,6 +117,7 @@ function scoreSong(s, filters, now){
 
 export default function Intelligence({ embedded = false }){
   const [bridge,setBridge]=useState({connected:false,source:null,nowPlaying:null,error:'Checking SI DJ Bridge…'});
+  const [bridgeChecking,setBridgeChecking]=useState(false);
   const [genre,setGenre]=useState('Country');
   const [vibe,setVibe]=useState('KEEP VIBE');
   const [era,setEra]=useState('ALL');
@@ -154,6 +155,15 @@ export default function Intelligence({ embedded = false }){
       return null;
     }
   },[]);
+  const recheckBridge=useCallback(async()=>{
+    setBridgeChecking(true);
+    try{
+      const result=await loadBridge();
+      toast(result?.connected ? 'SI DJ Bridge is connected.' : 'Bridge not found on this device. Open Studio on the computer running SI DJ Bridge.');
+    }finally{
+      setBridgeChecking(false);
+    }
+  },[loadBridge]);
   useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2000); return()=>clearInterval(t); },[loadBridge]);
   useEffect(()=>{ api.spotifyStatus().then(s=>setSpotifyConnected(!!s.connected)).catch(()=>{}); },[]);
   useEffect(()=>{
@@ -367,7 +377,7 @@ export default function Intelligence({ embedded = false }){
     <section className="panel" style={{position:'sticky',top:10,zIndex:20,backdropFilter:'blur(18px)',background:'var(--si-sticky)',borderColor:bridge.connected?'rgba(34,197,94,.45)':'var(--si-w12)'}}>
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center',flexWrap:'wrap'}}>
         <div className="eyebrow">{mode==='dj' ? (bridge.connected ? '● DJ MODE · BRIDGE CONNECTED' : 'DJ MODE · BRIDGE OFFLINE') : 'PLAYLIST MODE · BRIDGE STATUS'}</div>
-        <button className="btn btn-ghost btn-sm" onClick={loadBridge}>{bridge.connected ? 'RECHECK BRIDGE ↻' : 'CONNECT / RETRY BRIDGE ↻'}</button>
+        <button className="btn btn-ghost btn-sm" onClick={recheckBridge} disabled={bridgeChecking} aria-live="polite">{bridgeChecking ? 'CHECKING BRIDGE…' : bridge.connected ? 'RECHECK BRIDGE ↻' : 'CONNECT / RETRY BRIDGE ↻'}</button>
       </div>
       <div style={{display:'flex',justifyContent:'space-between',gap:18,alignItems:'center',marginTop:7,flexWrap:'wrap'}}>
         <div><h1 style={{fontSize:26,margin:'0 0 4px'}}>{bridge.nowPlaying?.title || 'Waiting for current track'}</h1><div className="hint" style={{fontSize:15}}>{bridge.nowPlaying ? [bridge.nowPlaying.artist,bridge.nowPlaying.genre,bridge.nowPlaying.bpm ? bridge.nowPlaying.bpm+' BPM':'',bridge.nowPlaying.key].filter(Boolean).join(' · ') : bridge.error}</div></div>
