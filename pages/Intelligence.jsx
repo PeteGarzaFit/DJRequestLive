@@ -374,7 +374,7 @@ export default function Intelligence({ embedded = false }){
 
     <section className="panel" style={{position:'sticky',top:10,zIndex:20,backdropFilter:'blur(18px)',background:'var(--si-sticky)',borderColor:bridge.connected?'rgba(34,197,94,.45)':'var(--si-w12)'}}>
       <div style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center',flexWrap:'wrap'}}>
-        <div className="eyebrow">{mode==='dj' ? (bridge.connected ? '● DJ MODE · BRIDGE CONNECTED' : 'DJ MODE · BRIDGE OFFLINE') : 'PLAYLIST MODE · BRIDGE STATUS'}</div>
+        <div className="eyebrow" style={{color:mode==='dj' && bridge.connected ? '#16a34a' : undefined}}>{mode==='dj' ? (bridge.connected ? 'DJ MODE · BRIDGE CONNECTED' : 'DJ MODE · BRIDGE OFFLINE') : 'PLAYLIST MODE · BRIDGE STATUS'}</div>
         <button className="btn btn-ghost btn-sm" onClick={loadBridge}>{bridge.connected ? 'RECHECK BRIDGE ↻' : 'CONNECT / RETRY BRIDGE ↻'}</button>
       </div>
       <div style={{display:'flex',justifyContent:'space-between',gap:18,alignItems:'center',marginTop:7,flexWrap:'wrap'}}>
