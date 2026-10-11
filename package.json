@@ -17,6 +17,7 @@
     "bridge": "node bridge/server.mjs",
     "bridge:app": "electron bridge-app/main.cjs",
     "bridge:package": "electron-builder --mac",
+    "bridge:package:win": "electron-builder --win nsis --x64 --publish never",
     "bridge:check": "node --check bridge/server.mjs && node --check bridge-app/main.cjs && node --check bridge-app/preload.cjs",
     "inventory:import": "node scripts/import-master-inventory.mjs",
     "si-dj:build": "node scripts/build-si-dj-knowledge.mjs"
