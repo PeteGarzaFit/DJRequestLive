@@ -201,3 +201,12 @@ CREATE TABLE IF NOT EXISTS si_dj_bridge_state (
   state_json TEXT NULL,
   updated_at INTEGER NOT NULL DEFAULT 0
 );
+
+
+CREATE TABLE IF NOT EXISTS si_dj_bridge_pairing_tickets (
+  ticket_hash TEXT NOT NULL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL,
+  claimed_at INTEGER NULL
+);
+CREATE INDEX IF NOT EXISTS idx_si_dj_bridge_pairing_expiry ON si_dj_bridge_pairing_tickets(expires_at);

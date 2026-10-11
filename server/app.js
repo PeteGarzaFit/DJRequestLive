@@ -766,6 +766,47 @@ ${JSON.stringify(library)}`;
       }
 
 
+      if (path === '/api/si-dj/bridge-pairing-ticket' && method === 'POST') {
+        const u = await requireUser(req);
+        const ticket = crypto.randomBytes(32).toString('base64url');
+        const ticketHash = crypto.createHash('sha256').update(ticket).digest('hex');
+        const now = Date.now();
+        await db.run('DELETE FROM si_dj_bridge_pairing_tickets WHERE expires_at < ? OR claimed_at IS NOT NULL', [now]);
+        await db.run(
+          'INSERT INTO si_dj_bridge_pairing_tickets (ticket_hash, user_id, expires_at, claimed_at) VALUES (?,?,?,NULL)',
+          [ticketHash, u.id, now + 5 * 60 * 1000]
+        );
+        return send(res, 200, { ticket, expires_in: 300 }), true;
+      }
+
+      if (path === '/api/si-dj/bridge-pairing-ticket/claim' && method === 'POST') {
+        const b = await readJson(req);
+        const ticket = str(b.ticket || '', 128, { min: 20 });
+        const ticketHash = crypto.createHash('sha256').update(ticket).digest('hex');
+        const now = Date.now();
+        const row = await db.get(
+          'SELECT user_id FROM si_dj_bridge_pairing_tickets WHERE ticket_hash = ? AND expires_at > ? AND claimed_at IS NULL',
+          [ticketHash, now]
+        );
+        if (!row) throw bad('bridge_pairing_ticket_invalid', 401);
+        const claimed = await db.run(
+          'UPDATE si_dj_bridge_pairing_tickets SET claimed_at = ? WHERE ticket_hash = ? AND expires_at > ? AND claimed_at IS NULL',
+          [now, ticketHash, now]
+        );
+        if (!claimed.changes) throw bad('bridge_pairing_ticket_invalid', 401);
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const tokenHashValue = crypto.createHash('sha256').update(token).digest('hex');
+        const existing = await db.get('SELECT user_id FROM si_dj_bridge_state WHERE user_id = ?', [row.user_id]);
+        if (existing) {
+          await db.run('UPDATE si_dj_bridge_state SET token_hash = ?, state_json = NULL, updated_at = 0 WHERE user_id = ?', [tokenHashValue, row.user_id]);
+        } else {
+          await db.run('INSERT INTO si_dj_bridge_state (user_id, token_hash, state_json, updated_at) VALUES (?,?,NULL,0)', [row.user_id, tokenHashValue]);
+        }
+        const cloudUrl = (process.env.PUBLIC_APP_URL || 'https://' + String(req.headers.host || 'djrequestlive.com').split(':')[0]).replace(/\/$/, '');
+        return send(res, 200, { ok: true, cloudUrl, token }), true;
+      }
+
       if (path === '/api/si-dj/bridge-token' && method === 'POST') {
         const u = await requireUser(req);
         const token = crypto.randomBytes(32).toString('hex');
