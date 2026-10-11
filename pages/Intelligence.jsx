@@ -116,7 +116,10 @@ function scoreSong(s, filters, now){
 }
 
 export default function Intelligence({ embedded = false }){
-  const [bridge,setBridge]=useState({connected:false,source:null,nowPlaying:null,error:'Checking SI DJ Bridge…'});
+  const [bridge,setBridge]=useState({connected:false,source:null,nowPlaying:null,error:'Checking cloud Bridge…'});
+  const [bridgePairing,setBridgePairing]=useState(null);
+  const [bridgePairingBusy,setBridgePairingBusy]=useState(false);
+  const [bridgeRemote,setBridgeRemote]=useState(null);
   const [genre,setGenre]=useState('Country');
   const [vibe,setVibe]=useState('KEEP VIBE');
   const [era,setEra]=useState('ALL');
@@ -143,18 +146,23 @@ export default function Intelligence({ embedded = false }){
 
   const loadBridge=useCallback(async()=>{
     try{
-      const r=await fetch('http://127.0.0.1:8765/now-playing',{cache:'no-store'});
-      if(!r.ok) throw new Error('Bridge returned HTTP '+r.status);
-      const data=await r.json();
-      setBridge(data);
+      const remote=await api.siDjBridge();
+      setBridgeRemote(remote);
+      const data=remote?.state || {connected:false,source:null,nowPlaying:null,error:remote?.paired ? 'Bridge is paired but not sending data yet' : 'Pair your Mac Bridge to this DJ account'};
+      setBridge({...data,connected:!!remote?.connected, error:remote?.connected ? null : (data.error || 'Bridge offline or reconnecting')});
       return data;
     }catch(e){
-      const message=e?.message || 'Browser blocked the local Bridge request';
-      setBridge({connected:false,source:null,nowPlaying:null,error:'Bridge connection failed: '+message});
+      setBridge({connected:false,source:null,nowPlaying:null,error:'Cloud connection failed. Check your internet connection.'});
       return null;
     }
   },[]);
-  useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2000); return()=>clearInterval(t); },[loadBridge]);
+  useEffect(()=>{ loadBridge(); const t=setInterval(loadBridge,2500); return()=>clearInterval(t); },[loadBridge]);
+  const createBridgePairing=async()=>{
+    setBridgePairingBusy(true);
+    try{ const result=await api.siDjBridgeToken(); setBridgePairing(result); toast('Bridge pairing token created. Add it to your Mac config.'); }
+    catch(e){ toast(errorText(e)); }
+    finally{setBridgePairingBusy(false);}
+  };
   useEffect(()=>{ api.spotifyStatus().then(s=>setSpotifyConnected(!!s.connected)).catch(()=>{}); },[]);
   useEffect(()=>{
     let active=true;
@@ -409,7 +417,21 @@ export default function Intelligence({ embedded = false }){
 
       <main>
         <section className="panel">
-            <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>{mode==='dj'?'Your next-track shortlist':'Build your party playlist'}</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · {mode==='dj'?`ranked from your library, event plays and guest requests${bridge.nowPlaying?' · anchored to what is playing':''}`:'add songs, then arrange the order'}</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{mode==='dj' && ai.length?'AI RANKED':suggestionSource}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
+            <section className="panel" style={{marginBottom:16}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+          <div>
+            <h3 style={{margin:'0 0 6px'}}>Remote SI DJ Bridge</h3>
+            <p className="hint" style={{margin:0}}>{bridgeRemote?.connected ? 'Connected to your Mac Bridge · works across Wi-Fi, cellular and hotspot.' : bridgeRemote?.paired ? 'Paired, but no recent heartbeat. Check that the Bridge is running on your Mac.' : 'Pair the Mac Bridge once so this page works on your iPhone and iPad from any network.'}</p>
+          </div>
+          <button className="btn" type="button" onClick={createBridgePairing} disabled={bridgePairingBusy}>{bridgePairingBusy?'Creating…':'Generate pairing token'}</button>
+        </div>
+        {bridgePairing?.token && <div style={{marginTop:14}}>
+          <p className="hint">On your Mac, open <code>~/DJRequestLive/bridge/config.json</code> and add this top-level cloud section. Keep the token private.</p>
+          <pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',padding:12,borderRadius:8,background:'var(--panel-2, #111827)',color:'inherit'}}>{JSON.stringify({cloud:{url:bridgePairing.config.cloudUrl,token:bridgePairing.token}},null,2)}</pre>
+          <button className="btn" type="button" onClick={()=>{navigator.clipboard?.writeText(JSON.stringify({cloud:{url:bridgePairing.config.cloudUrl,token:bridgePairing.token}},null,2));toast('Cloud config copied');}}>Copy cloud config</button>
+        </div>}
+      </section>
+      <div className="shead"><div><div className="eyebrow">SUPER INTELLIGENCE TRACK LIST</div><h2 style={{margin:'5px 0 0'}}>{mode==='dj'?'Your next-track shortlist':'Build your party playlist'}</h2><p className="hint" style={{marginTop:4}}>{genre} · {vibe} · {era} · {mode==='dj'?`ranked from your library, event plays and guest requests${bridge.nowPlaying?' · anchored to what is playing':''}`:'add songs, then arrange the order'}</p>{artistFilter && <div className="ai-pill" style={{display:'inline-flex',marginTop:7}}>ARTIST FILTER · {artistFilter}</div>}</div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><span className="ai-pill">{mode==='dj' && ai.length?'AI RANKED':suggestionSource}</span><button className="btn btn-ghost btn-sm" onClick={handleRefresh} disabled={libraryBusy}>REFRESH LIST ↻</button></div></div>
           <div className="field" style={{marginTop:14}}><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search artist or song…" /></div>
           <div style={{display:'grid',gap:9,marginTop:12}}>
             {display.map((s,i)=><article key={(s.title||'')+'|'+(s.artist||'')+'|'+i} style={{display:'grid',gridTemplateColumns:'44px minmax(0,1fr) auto',gap:12,alignItems:'center',padding:'13px 14px',border:'1px solid var(--si-w09)',borderRadius:12,background:'var(--si-w025)'}}>

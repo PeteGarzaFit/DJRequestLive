@@ -766,6 +766,67 @@ ${JSON.stringify(library)}`;
       }
 
 
+      if (path === '/api/si-dj/bridge-token' && method === 'POST') {
+        const u = await requireUser(req);
+        const token = crypto.randomBytes(32).toString('hex');
+        const tokenHashValue = crypto.createHash('sha256').update(token).digest('hex');
+        const existing = await db.get('SELECT user_id FROM si_dj_bridge_state WHERE user_id = ?', [u.id]);
+        if (existing) {
+          await db.run('UPDATE si_dj_bridge_state SET token_hash = ?, state_json = NULL, updated_at = 0 WHERE user_id = ?', [tokenHashValue, u.id]);
+        } else {
+          await db.run('INSERT INTO si_dj_bridge_state (user_id, token_hash, state_json, updated_at) VALUES (?,?,NULL,0)', [u.id, tokenHashValue]);
+        }
+        return send(res, 200, { token, config: { cloudUrl: (process.env.PUBLIC_APP_URL || 'https://' + String(req.headers.host || 'djrequestlive.com').split(':')[0]).replace(/\/$/, ''), cloudToken: token } }), true;
+      }
+
+      if (path === '/api/si-dj/bridge' && method === 'GET') {
+        const u = await requireUser(req);
+        const row = await db.get('SELECT state_json, updated_at, token_hash FROM si_dj_bridge_state WHERE user_id = ?', [u.id]);
+        const age = row?.updated_at ? Date.now() - Number(row.updated_at) : Infinity;
+        const state = row?.state_json ? json(row.state_json, null) : null;
+        return send(res, 200, { paired: !!row?.token_hash, connected: !!state?.connected && age < 10000, state, updated_at: Number(row?.updated_at || 0), age_ms: Number.isFinite(age) ? age : null }), true;
+      }
+
+      if (path === '/api/si-dj/bridge/push' && method === 'POST') {
+        const bearer = String(req.headers.authorization || '').match(/^Bearer\s+([a-f0-9]{64})$/i)?.[1] || '';
+        if (!bearer) throw bad('bridge_unauthorized', 401);
+        const hash = crypto.createHash('sha256').update(bearer).digest('hex');
+        const owner = await db.get('SELECT user_id FROM si_dj_bridge_state WHERE token_hash = ?', [hash]);
+        if (!owner) throw bad('bridge_unauthorized', 401);
+        const b = await readJson(req, 200 * 1024);
+        const state = b.state && typeof b.state === 'object' ? b.state : {};
+        const safeState = {
+          connected: !!state.connected,
+          source: str(state.source || 'virtualdj-history', 60),
+          nowPlaying: state.nowPlaying && typeof state.nowPlaying === 'object'
+            ? { artist: str(state.nowPlaying.artist || '', 255), title: str(state.nowPlaying.title || '', 500), raw: str(state.nowPlaying.raw || '', 1000), source: str(state.nowPlaying.source || state.source || 'bridge', 60) }
+            : null,
+          updatedAt: Date.now(),
+          error: state.connected ? null : str(state.error || 'Waiting for DJ software', 240)
+        };
+        await db.run('UPDATE si_dj_bridge_state SET state_json = ?, updated_at = ? WHERE user_id = ?', [JSON.stringify(safeState), Date.now(), owner.user_id]);
+        const entries = Array.isArray(b.entries) ? b.entries.slice(0, 100) : [];
+        for (const entry of entries) {
+          const artist = String(entry?.artist || '').trim().slice(0,255);
+          const title = String(entry?.title || '').trim().slice(0,500);
+          if (!artist || !title) continue;
+          const signature = [entry.date || '', entry.time || '', artist, title].join('|');
+          const eventKey = crypto.createHash('sha256').update(signature).digest('hex');
+          let playedAt = Date.now();
+          if (entry.date && entry.time) {
+            const stamp = new Date(String(entry.date).replaceAll('/', '-') + 'T' + String(entry.time) + ':00').getTime();
+            if (Number.isFinite(stamp)) playedAt = stamp;
+          }
+          try {
+            await recordSiDjBridgePlay({ id: owner.user_id }, {
+              event_key: eventKey, played_at: playedAt, artist, title,
+              source: entry.source || 'virtualdj-history', raw: entry.raw || ''
+            });
+          } catch (e) { console.error('Bridge play ingest failed', e?.message || e); }
+        }
+        return send(res, 200, { ok: true, received: entries.length, updated_at: Date.now() }), true;
+      }
+
       if (path === '/api/si-dj/plays' && method === 'POST') {
         const u = await requireUser(req);
         const b = await readJson(req);

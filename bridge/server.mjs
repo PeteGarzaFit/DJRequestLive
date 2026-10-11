@@ -1,4 +1,5 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -122,6 +123,9 @@ function rekordbox() {
   }
 }
 
+let cloudCursor = null;
+let cloudLastPush = 0;
+
 let state = {
   connected: false,
   source: null,
@@ -208,5 +212,35 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('DJ Request Live Bridge: http://127.0.0.1:' + PORT);
 });
 
+
+async function pushCloud() {
+  const c = cfg();
+  const cloudUrl = String(c.cloud?.url || process.env.DJRL_CLOUD_URL || '').replace(/\/$/, '');
+  const token = String(c.cloud?.token || process.env.DJRL_BRIDGE_TOKEN || '');
+  if (!cloudUrl || !/^[a-f0-9]{64}$/i.test(token)) return;
+  try {
+    const configured = c.virtualdjHistory?.historyFile;
+    const historyFile = configured || defaultVdjHistoryFile();
+    const allEntries = readHistory(historyFile);
+    if (cloudCursor === null) cloudCursor = allEntries.length;
+    const entries = allEntries.slice(Math.max(0, cloudCursor)).slice(0, 100).map(x => ({ ...x, source: 'virtualdj-history' }));
+    const response = await fetch(cloudUrl + '/api/si-dj/bridge/push', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state, entries })
+    });
+    if (response.ok) {
+      cloudCursor += entries.length;
+      cloudLastPush = Date.now();
+    } else if (response.status === 401) {
+      console.error('SI DJ cloud relay rejected the Bridge token. Generate a new token in Studio and update bridge/config.json.');
+    }
+  } catch (e) {
+    if (Date.now() - cloudLastPush > 15000) console.error('SI DJ cloud relay unavailable:', e?.message || e);
+  }
+}
+
 poll();
 setInterval(poll, 2000);
+setInterval(pushCloud, 2000);
+pushCloud();
