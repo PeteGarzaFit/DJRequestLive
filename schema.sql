@@ -378,3 +378,13 @@ CREATE TABLE IF NOT EXISTS si_dj_event_memory_tracks (
   INDEX idx_si_dj_event_memory_track_played (played_count),
   INDEX idx_si_dj_event_memory_track_requests (request_count)
 ) CHARACTER SET utf8mb4;
+
+
+-- Authenticated outbound SI DJ Bridge relay. One token/state per DJ account.
+CREATE TABLE IF NOT EXISTS si_dj_bridge_state (
+  user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+  token_hash CHAR(64) NULL,
+  state_json TEXT NULL,
+  updated_at BIGINT NOT NULL DEFAULT 0,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) CHARACTER SET utf8mb4;
