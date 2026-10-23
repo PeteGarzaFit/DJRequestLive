@@ -2,6 +2,19 @@ name: Build SI DJ Bridge
 
 on:
   workflow_dispatch:
+    inputs:
+      release_mode:
+        description: "Build both platforms, or publish a Mac-only release"
+        type: choice
+        options:
+          - build
+          - mac-release
+        default: build
+        required: true
+      release_tag:
+        description: "Required for mac-release, for example bridge-v1.2.3"
+        type: string
+        required: false
   push:
     branches:
       - main
@@ -34,6 +47,7 @@ jobs:
           path: release/SI-DJ-Bridge.dmg
 
   windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.release_mode != 'mac-release'
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
@@ -66,3 +80,27 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" release/SI-DJ-Bridge.dmg release/SI-DJ-Bridge-Setup.exe --title "SI DJ Bridge ${{ github.ref_name }}" --generate-notes
+
+  mac-release:
+    if: github.event_name == 'workflow_dispatch' && inputs.release_mode == 'mac-release'
+    needs: [mac]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^bridge-v[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+            echo "release_tag must start with bridge-v and contain a valid version."
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: si-dj-bridge-mac
+          path: release
+      - name: Publish Mac-only GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          gh release create "$RELEASE_TAG" release/SI-DJ-Bridge.dmg --target main --title "SI DJ Bridge $RELEASE_TAG (Mac)" --generate-notes
