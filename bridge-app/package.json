@@ -1,0 +1,78 @@
+{
+  "name": "si-dj-bridge",
+  "private": true,
+  "version": "0.3.0",
+  "description": "SI DJ Bridge desktop app",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder --mac",
+    "package:win": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^42.11.18",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "live.djrequest.si-bridge",
+    "productName": "SI DJ Bridge",
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "index.html"
+    ],
+    "extraResources": [
+      {
+        "from": "../bridge",
+        "to": "bridge",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.music",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "artifactName": "SI-DJ-Bridge.${ext}"
+    },
+    "dmg": {
+      "title": "SI DJ Bridge"
+    },
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "SI-DJ-Bridge-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    },
+    "protocols": [
+      {
+        "name": "SI DJ Bridge",
+        "schemes": [
+          "sidj-bridge"
+        ]
+      }
+    ]
+  }
+}

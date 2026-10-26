@@ -21,8 +21,6 @@ on:
     paths:
       - 'bridge/**'
       - 'bridge-app/**'
-      - 'package.json'
-      - 'package-lock.json'
       - '.github/workflows/build-bridge.yml'
     tags:
       - 'bridge-v*'
@@ -39,12 +37,14 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+        working-directory: bridge-app
       - name: Build Mac desktop installer
+        working-directory: bridge-app
         run: npx electron-builder --mac dmg --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: si-dj-bridge-mac
-          path: release/SI-DJ-Bridge.dmg
+          path: bridge-app/release/SI-DJ-Bridge.dmg
 
   windows:
     if: github.event_name != 'workflow_dispatch' || inputs.release_mode != 'mac-release'
@@ -55,12 +55,14 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+        working-directory: bridge-app
       - name: Build Windows desktop installer
+        working-directory: bridge-app
         run: npx electron-builder --win nsis --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: si-dj-bridge-windows
-          path: release/SI-DJ-Bridge-Setup.exe
+          path: bridge-app/release/SI-DJ-Bridge-Setup.exe
 
   release:
     if: startsWith(github.ref, 'refs/tags/bridge-v')

@@ -13,18 +13,20 @@ The workflow publishes both files to the GitHub Release. The website download pa
 
 ## Local build
 
-Install dependencies and build the desktop app:
+The desktop app has its own `package.json` in `bridge-app/`, so Electron is never installed with the website. Install its dependencies and build from there:
 
 ```bash
+cd bridge-app
 npm install
-npm run bridge:package
+npm run package
 ```
 
-The Mac installer is written to `release/SI-DJ-Bridge.dmg`.
+The Mac installer is written to `bridge-app/release/SI-DJ-Bridge.dmg`.
 
 For Windows, run Electron Builder on Windows:
 
 ```bash
+cd bridge-app
 npm install
 npx electron-builder --win nsis --publish never
 ```
