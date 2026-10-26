@@ -3,7 +3,6 @@
   "private": true,
   "version": "0.3.0",
   "type": "module",
-  "main": "bridge-app/main.cjs",
   "engines": {
     "node": ">=20"
   },
@@ -16,8 +15,8 @@
     "preview": "vite preview",
     "bridge": "node bridge/server.mjs",
     "bridge:setup": "node scripts/setup-bridge-cloud.mjs",
-    "bridge:app": "electron bridge-app/main.cjs",
-    "bridge:package": "electron-builder --mac",
+    "bridge:app": "npm --prefix bridge-app start",
+    "bridge:package": "npm --prefix bridge-app run package",
     "bridge:check": "node --check bridge/server.mjs && node --check bridge-app/main.cjs && node --check bridge-app/preload.cjs",
     "inventory:import": "node scripts/import-master-inventory.mjs",
     "si-dj:build": "node scripts/build-si-dj-knowledge.mjs"
@@ -36,69 +35,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
-    "electron": "^42.11.18",
-    "electron-builder": "^26.0.12",
     "vite": "^7.1.7"
-  },
-  "build": {
-    "appId": "live.djrequest.si-bridge",
-    "productName": "SI DJ Bridge",
-    "files": [
-      "bridge-app/**/*",
-      "bridge/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "bridge",
-        "to": "bridge",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
-    "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "universal"
-          ]
-        }
-      ],
-      "category": "public.app-category.music",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "artifactName": "SI-DJ-Bridge.${ext}"
-    },
-    "dmg": {
-      "title": "SI DJ Bridge"
-    },
-    "directories": {
-      "output": "release"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "artifactName": "SI-DJ-Bridge-Setup.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "perMachine": false
-    },
-    "protocols": [
-      {
-        "name": "SI DJ Bridge",
-        "schemes": [
-          "sidj-bridge"
-        ]
-      }
-    ]
   }
 }

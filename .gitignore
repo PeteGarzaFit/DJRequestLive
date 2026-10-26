@@ -4,3 +4,4 @@ dist
 *.sqlite
 config.json
 config.json.*
+bridge-app/release
