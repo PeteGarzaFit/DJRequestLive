@@ -25,10 +25,11 @@ const BRIDAL_ENTRIES = [
   ['Ring Bearer and Flower Girl', 'Ring Bearer and Flower Girl'],
 ];
 const SPECIAL_EVENTS = [
-  "Bride's family processional", "Groom's family processional",
+  "Bride's family processional", "Groom's family processional", 'Bridal party processional',
   "Bride's processional", "Groom's processional", 'Recessional',
-  'Bride and Groom grand entrance', 'Bridal party announcements', 'Bride and Groom first dance',
-  'Bride dances with her father', 'Groom dances with his mother',
+  'Bride and Groom grand entrance', 'Bridal party grand entrance', 'Bridal party announcements',
+  'Bride and Groom first dance', 'Bride dances with her father', 'Groom dances with his mother',
+  'Cake cutting', 'Bouquet toss', 'Garter toss', 'Anniversary dance', 'Last dance',
 ];
 const MUSIC_STYLES = [
   'Country', 'Pop', 'Oldies (50s and 60s)', 'Classic Rock (60s and 70s)', '80s Rock / Pop', 'Rap', 'R&B',
@@ -73,6 +74,7 @@ function blankPlan() {
     artists: { like: '', dislike: '', reviewed: false },
     behaviors: Object.fromEntries(DJ_BEHAVIORS.map(behavior => [behavior, ''])),
     spotifyPlaylist: '',
+    specialSongsPlaylistUrl: '',
     openDance: { starters: weddingStarters(), custom: [], none: false },
     suggestions: [],
     collaboratorName: '',
@@ -83,10 +85,10 @@ function blankPlan() {
 function mergePlan(saved = {}) {
   const plan = { ...blankPlan(), ...saved };
   const songs = Array.isArray(saved.specialSongs) ? saved.specialSongs : [];
-  const existing = new Set(songs.map(song => song.event));
+  const songsByEvent = new Map(songs.map(song => [song.event, song]));
   plan.specialSongs = [
-    ...songs,
-    ...SPECIAL_EVENTS.filter(event => !existing.has(event)).map(event => ({ event, title: '', artist: '', notApplicable: false })),
+    ...SPECIAL_EVENTS.map(event => songsByEvent.get(event) || ({ event, title: '', artist: '', notApplicable: false })),
+    ...songs.filter(song => !SPECIAL_EVENTS.includes(song.event)),
   ];
   return plan;
 }
@@ -195,6 +197,9 @@ export default function WeddingPlanner({ shared = false }) {
   const [spotifyBusy, setSpotifyBusy] = useState(false);
   const [spotifyResult, setSpotifyResult] = useState(null);
   const [spotifyError, setSpotifyError] = useState('');
+  const [specialSpotifyBusy, setSpecialSpotifyBusy] = useState(false);
+  const [specialSpotifyResult, setSpecialSpotifyResult] = useState(null);
+  const [specialSpotifyError, setSpecialSpotifyError] = useState('');
   const revision = useRef(0);
 
   const loadOwner = useCallback(async () => {
@@ -427,6 +432,33 @@ export default function WeddingPlanner({ shared = false }) {
     } finally { setSpotifyBusy(false); }
   }
 
+  async function createSpecialSongsSpotifyPlaylist() {
+    if (!specialSongsComplete || !specialSongRows.length || specialSpotifyBusy) return false;
+    setSpecialSpotifyBusy(true);
+    setSpecialSpotifyError('');
+    setSpecialSpotifyResult(null);
+    const weddingName = plan.title.trim() || 'Wedding';
+    const name = (weddingName + ' Special Event Songs').slice(0, 100);
+    try {
+      const response = await api.spotifyCreatePlaylist({
+        name,
+        description: 'Wedding formalities songs for ' + weddingName + ' · Created with DJ Request Live',
+        visibility: spotifyVisibility,
+        songs: specialSongRows.map(({ title, artist }) => ({ title, artist })),
+      });
+      setSpecialSpotifyResult(response.playlist);
+      if (response.playlist?.url) editPlan(p => ({ ...p, specialSongsPlaylistUrl: response.playlist.url }));
+      return true;
+    } catch (error) {
+      setSpecialSpotifyError(error.code === 'spotify_not_configured'
+        ? 'Spotify is not configured on the DJ Request Live server yet.'
+        : error.code === 'spotify_api_error' ? 'Spotify could not create the playlist. Try again.'
+        : error.code === 'spotify_reconnect_required' ? 'Reconnect Spotify and try again.'
+        : 'Could not create the Special Event Songs playlist.');
+      return false;
+    } finally { setSpecialSpotifyBusy(false); }
+  }
+
   if (!ready) return <main className="wedding-app"><div className="wp-loading">{status}</div></main>;
   if (!shareToken && !shared) return <main className="wedding-app"><div className="wp-loading">Preparing your wedding workspace…</div></main>;
 
@@ -434,6 +466,10 @@ export default function WeddingPlanner({ shared = false }) {
   const shareLink = shareUrl;
   const spotifyUrl = spotifyPlaylistHref(plan.spotifyPlaylist);
   const openDanceSpotifyUrl = spotifyPlaylistHref(plan.openDance?.spotifyPlaylistUrl);
+  const specialSongRows = (plan.specialSongs || []).filter(item => !item.notApplicable && nonempty(item.title) && nonempty(item.artist));
+  const specialSongsMissing = (plan.specialSongs || []).filter(item => !item.notApplicable && (!nonempty(item.title) || !nonempty(item.artist)));
+  const specialSongsComplete = (plan.specialSongs || []).length > 0 && specialSongsMissing.length === 0;
+  const specialSongsSpotifyUrl = spotifyPlaylistHref(plan.specialSongsPlaylistUrl);
   const hasSeparateOpenDancePlaylist = !!openDanceSpotifyUrl && spotifyPlaylistId(openDanceSpotifyUrl) !== spotifyPlaylistId(spotifyUrl);
   const openDanceLinkNeedsReplacement = !!openDanceSpotifyUrl && !hasSeparateOpenDancePlaylist;
   const artistChoices = plan.artists || { like: '', dislike: '', reviewed: false };
@@ -531,10 +567,23 @@ export default function WeddingPlanner({ shared = false }) {
           </section>
 
           <section className="wp-card">
-            <div className="wp-section-head"><span className="wp-section-index">D</span><div><h2>Special event songs</h2><p>Choose songs for each processional group, the recessional, and reception moments. Mark any unused moment not applicable.</p></div></div>
+            <div className="wp-section-head"><span className="wp-section-index">D</span><div><h2>Formalities and special event songs</h2><p>Enter the title and artist for every song, or mark that moment N/A. Complete these choices to build the separate Spotify playlist for this wedding.</p></div></div>
+            <div className="wp-table-head wp-formality-head"><span>Moment</span><span>Song title</span><span>Artist</span><span>Status</span></div>
             {(plan.specialSongs || []).map((item, i) => <div className="wp-song-row" key={item.event}>
-              <b>{item.event}</b><input className="wp-input" value={item.title || ''} disabled={item.notApplicable} placeholder="Song title" onChange={e => patchArray('specialSongs', i, { title: e.target.value })} /><input className="wp-input" value={item.artist || ''} disabled={item.notApplicable} placeholder="Artist" onChange={e => patchArray('specialSongs', i, { artist: e.target.value })} /><CheckLine checked={item.notApplicable} onChange={v => patchArray('specialSongs', i, { notApplicable: v, title: '', artist: '' })}>N/A</CheckLine>
+              <b>{item.event}<small className="wp-song-required">Required song and artist, or N/A</small></b><input className="wp-input" aria-label={'Song title for ' + item.event} aria-required={!item.notApplicable} value={item.title || ''} disabled={item.notApplicable} placeholder="Song title" onChange={e => patchArray('specialSongs', i, { title: e.target.value })} /><input className="wp-input" aria-label={'Artist for ' + item.event} aria-required={!item.notApplicable} value={item.artist || ''} disabled={item.notApplicable} placeholder="Artist" onChange={e => patchArray('specialSongs', i, { artist: e.target.value })} /><CheckLine checked={item.notApplicable} onChange={v => patchArray('specialSongs', i, { notApplicable: v, title: '', artist: '' })}>N/A</CheckLine>
             </div>)}
+            {!shared && <div className="wp-special-playlist wedding-no-print">
+              <h3>Wedding Special Event Songs Spotify playlist</h3>
+              <p className="wp-help">This is its own playlist, named “{plan.title.trim() || 'Wedding'} Special Event Songs”. It includes every completed formalities song in the order above.</p>
+              {spotifyStatus === null ? <span className="wp-help">Checking Spotify connection…</span> : spotifyStatus.connected ? <>
+                <label className="wp-spotify-visibility"><span>Playlist visibility</span><select className="wp-input" value={spotifyVisibility} onChange={e => setSpotifyVisibility(e.target.value)}><option value="private">Private</option><option value="public">Public</option><option value="collaborative">Collaborative</option></select></label>
+                {!specialSongsComplete && <p className="wp-inline-error" role="status">Complete each required song’s title and artist, or mark it N/A, before creating the playlist. {specialSongsMissing.length} moment{specialSongsMissing.length === 1 ? '' : 's'} still need an answer.</p>}
+                <button type="button" className="wp-button wp-button-dark" disabled={specialSpotifyBusy || !specialSongsComplete} onClick={createSpecialSongsSpotifyPlaylist}>{specialSpotifyBusy ? 'Creating Spotify playlist…' : 'Create Special Event Songs Playlist in Spotify'}</button>
+                {specialSpotifyResult && <p className="wp-spotify-feedback" role="status"><b>{specialSpotifyResult.added} songs added to {specialSpotifyResult.name}.</b>{specialSpotifyResult.missing?.length ? ' ' + specialSpotifyResult.missing.length + ' song' + (specialSpotifyResult.missing.length === 1 ? '' : 's') + ' could not be matched.' : ' Every song matched.'}</p>}
+                {specialSongsSpotifyUrl && <p className="wp-spotify-feedback">Special Event Songs Playlist: <a href={specialSongsSpotifyUrl} target="_blank" rel="noreferrer">Open in Spotify</a></p>}
+              </> : spotifyStatus.error === 'spotify_not_configured' ? <span className="wp-inline-error">Spotify is not configured on the DJ Request Live server.</span> : <a className="wp-button wp-button-light wp-spotify-button" href={api.spotifyConnectUrl}>Connect Spotify to create your formalities playlist</a>}
+              {specialSpotifyError && <p className="wp-inline-error" role="alert">{specialSpotifyError}</p>}
+            </div>}
           </section>
 
           {['mustPlay', 'doNotPlay'].map(section => {
