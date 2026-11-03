@@ -522,6 +522,7 @@ export default function WeddingPlanner({ shared = false }) {
 
           <section className="wp-card wp-open-dance">
             <div className="wp-section-head"><span className="wp-section-index">J</span><div><h2>Open dance: start with 40 SI DJ picks</h2><p>A useful mix from DJ Request Live’s highest dance-floor, sing-along, and cross-generation scores. Keep the songs that fit, cross off the rest, then add family favorites.</p></div></div>
+            {spotifyUrl && <a className="wp-button wp-button-light wp-spotify-button wedding-no-print" href={spotifyUrl} target="_blank" rel="noreferrer">Open starting playlist in Spotify</a>}
             <div className="wp-starter-tools wedding-no-print"><span><b>{(plan.openDance?.starters || []).filter(s => s.selected && !s.removed && !doNotPlayKeys.has(songKey(s))).length}</b> of 40 starters kept</span><div><ActionButton type="button" className="wp-button wp-button-light" onClick={suggestStarterMix}>Suggest 12 for this couple</ActionButton><ActionButton type="button" className="wp-button wp-button-light" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, none: false, starters: p.openDance.starters.map(s => ({ ...s, selected: !s.removed && !doNotPlayKeys.has(songKey(s)) })) } }))}>Keep all 40</ActionButton><ActionButton type="button" className="wp-button wp-button-quiet" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, starters: weddingStarters() } }))}>Restore 40</ActionButton></div></div>
             {notice && <p className="wp-help wedding-no-print">{notice}</p>}
             <div className="wp-starter-list">{(plan.openDance?.starters || []).map((song, originalIndex) => ({ song, originalIndex })).filter(({ song }) => !song.removed).map(({ song, originalIndex: i }) => <div className="wp-starter-row" key={`${songKey(song)}-${i}`}>
@@ -561,7 +562,7 @@ export default function WeddingPlanner({ shared = false }) {
             <p className="wp-side-kicker">Open dance playlist</p>
             <h2>{plan.couple?.bride || 'Bride'} {plan.couple?.groom ? '& ' + plan.couple.groom : ''}</h2>
             {openDanceRows.length ? <ol>{openDanceRows.map(song => <li key={songKey(song)}><b>{song.title}</b><span>{song.artist}</span></li>)}</ol> : <p className="wp-side-note">No songs kept yet.</p>}
-            {spotifyUrl && <p className="wp-side-note">Spotify starting playlist: {spotifyUrl}</p>}
+            {spotifyUrl && <p className="wp-side-note">Spotify starting playlist: <a href={spotifyUrl} target="_blank" rel="noreferrer">Open in Spotify</a></p>}
           </section>
         </aside>
       </div>
