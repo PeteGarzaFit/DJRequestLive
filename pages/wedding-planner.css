@@ -223,20 +223,22 @@
 }
 
 @media print {
-  @page { size: letter; margin: .55in; }
+  @page { size: letter; margin: .38in; }
   body { background: #fff !important; }
   .wedding-app { padding: 0 !important; min-height: 0; background: #fff !important; color: #1e211d; }
   .wp-shell { max-width: none; }
   .wedding-no-print,.wp-sidebar,.wp-footer { display: none !important; }
   .wp-layout { display: block; }
   .wp-form-column { display: block; }
-  .wp-card { break-inside: avoid; box-shadow: none; border: 1px solid #d1d5d8; padding: 14px; margin-bottom: 10px; }
+  .wp-card { break-inside: auto; box-shadow: none; border: 1px solid #d1d5d8; padding: 9px; margin-bottom: 6px; }
+  .wp-card > * { orphans: 2; widows: 2; }
+  .wp-section-head,.wp-contact-row,.wp-time-row,.wp-table-row,.wp-song-row,.wp-style-row,.wp-behavior-row { break-inside: avoid; }
   .wp-hero { display: none; }
-  .wp-print-title { display: block; margin-bottom: 18px; }
+  .wp-print-title { display: block; margin-bottom: 8px; }
   .wp-print-title p { margin: 0 0 6px; text-transform: uppercase; letter-spacing: .1em; color: #667366; font-size: 9px; }
-  .wp-print-title h1 { font-size: 28px; }
-  .wp-print-title small { display: block; margin-top: 6px; color: #666; }
-  .wp-section-head { margin-bottom: 10px; }
+  .wp-print-title h1 { font-size: 23px; }
+  .wp-print-title small { display: block; margin-top: 3px; color: #666; }
+  .wp-section-head { margin-bottom: 6px; }
   .wp-section-head h2 { font-size: 17px; }
   .wp-section-head p,.wp-help { font-size: 9px; }
   .wp-input { border-color: #aaa; min-height: 28px; padding: 5px; background: transparent; font-size: 9px; }
