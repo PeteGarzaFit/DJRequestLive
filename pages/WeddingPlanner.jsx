@@ -130,6 +130,11 @@ function spotifyPlaylistHref(value) {
   const uri = s.match(/^spotify:playlist:([A-Za-z0-9]+)$/i);
   return uri ? `https://open.spotify.com/playlist/${uri[1]}` : '';
 }
+function spotifyPlaylistId(value) {
+  const match = String(value || '').trim().match(/^(?:https:\/\/open\.spotify\.com\/playlist\/|spotify:playlist:)([A-Za-z0-9]+)/i);
+  return match?.[1] || '';
+}
+
 function songKey(s) { return `${String(s?.title || '').trim().toLowerCase()}|${String(s?.artist || '').trim().toLowerCase()}`; }
 
 function Field({ label, value, onChange, placeholder = '', multiline = false, rows = 3, type = 'text', required = false }) {
@@ -428,6 +433,9 @@ export default function WeddingPlanner({ shared = false }) {
   const missing = progress.checks.filter(x => !x.ok);
   const shareLink = shareUrl;
   const spotifyUrl = spotifyPlaylistHref(plan.spotifyPlaylist);
+  const openDanceSpotifyUrl = spotifyPlaylistHref(plan.openDance?.spotifyPlaylistUrl);
+  const hasSeparateOpenDancePlaylist = !!openDanceSpotifyUrl && spotifyPlaylistId(openDanceSpotifyUrl) !== spotifyPlaylistId(spotifyUrl);
+  const openDanceLinkNeedsReplacement = !!openDanceSpotifyUrl && !hasSeparateOpenDancePlaylist;
   const artistChoices = plan.artists || { like: '', dislike: '', reviewed: false };
   const playlistDisabled = openDanceRows.length === 0;
   const printSheet = () => progress.percent === 100 && setPrintMode('sheet');
@@ -568,13 +576,14 @@ export default function WeddingPlanner({ shared = false }) {
             {!shared && <div className="wp-spotify-tools wedding-no-print">
               {spotifyStatus === null ? <span className="wp-help">Checking Spotify connection…</span> : spotifyStatus.connected ? <>
                 <label className="wp-spotify-visibility"><span>New playlist visibility</span><select className="wp-input" value={spotifyVisibility} onChange={e => setSpotifyVisibility(e.target.value)}><option value="private">Private</option><option value="public">Public</option><option value="collaborative">Collaborative</option></select></label>
-                <button type="button" className="wp-button wp-button-dark" disabled={spotifyBusy || !openDanceRows.length} onClick={createOpenDanceSpotifyPlaylist}>{spotifyBusy ? 'Creating Spotify playlist…' : 'Create Open Dance Playlist'}</button>
+                <button type="button" className="wp-button wp-button-dark" disabled={spotifyBusy || !openDanceRows.length} onClick={createOpenDanceSpotifyPlaylist}>{spotifyBusy ? 'Creating Spotify playlist…' : openDanceLinkNeedsReplacement ? 'Create a separate Open Dance Playlist' : 'Create Open Dance Playlist'}</button>
               </> : spotifyStatus.error === 'spotify_not_configured' ? <span className="wp-inline-error">Spotify is not configured on the DJ Request Live server.</span> : <a className="wp-button wp-button-light wp-spotify-button" href={api.spotifyConnectUrl}>Connect Spotify to create your playlist</a>}
               {spotifyResult && <p className="wp-spotify-feedback" role="status"><b>{spotifyResult.added} songs added to {spotifyResult.name}.</b>{spotifyResult.missing?.length ? ` ${spotifyResult.missing.length} song${spotifyResult.missing.length === 1 ? '' : 's'} could not be matched.` : ' Every song matched.'}</p>}
-              {plan.openDance?.spotifyPlaylistUrl && <p className="wp-spotify-feedback">Open Dance Playlist: <a href={plan.openDance.spotifyPlaylistUrl} target="_blank" rel="noreferrer">Open in Spotify</a></p>}
+              {hasSeparateOpenDancePlaylist && <p className="wp-spotify-feedback">Open Dance Playlist: <a href={openDanceSpotifyUrl} target="_blank" rel="noreferrer">Open in Spotify</a></p>}
+              {openDanceLinkNeedsReplacement && <p className="wp-spotify-feedback" role="status">The saved Open Dance link is the same as the couple’s starting playlist. Create a separate playlist to get its own Spotify link.</p>}
+              {!hasSeparateOpenDancePlaylist && !openDanceLinkNeedsReplacement && <p className="wp-spotify-feedback">Create a separate Open Dance Playlist to get its Spotify link.</p>}
               {spotifyError && <p className="wp-inline-error" role="alert">{spotifyError}</p>}
             </div>}
-            {spotifyUrl && <a className="wp-button wp-button-light wp-spotify-button wedding-no-print" href={spotifyUrl} target="_blank" rel="noreferrer">Open couple’s starting playlist</a>}
             <div className="wp-starter-tools wedding-no-print"><span><b>{(plan.openDance?.starters || []).filter(s => s.selected && !s.removed && !doNotPlayKeys.has(songKey(s))).length}</b> of 40 starters kept</span><div><ActionButton type="button" className="wp-button wp-button-light" onClick={suggestStarterMix}>Suggest 12 for this couple</ActionButton><ActionButton type="button" className="wp-button wp-button-light" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, none: false, starters: p.openDance.starters.map(s => ({ ...s, selected: !s.removed && !doNotPlayKeys.has(songKey(s)) })) } }))}>Keep all 40</ActionButton><ActionButton type="button" className="wp-button wp-button-quiet" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, starters: weddingStarters() } }))}>Restore 40</ActionButton></div></div>
             {notice && <p className="wp-help wedding-no-print">{notice}</p>}
             <div className="wp-starter-list">{(plan.openDance?.starters || []).map((song, originalIndex) => ({ song, originalIndex })).filter(({ song }) => !song.removed).map(({ song, originalIndex: i }) => <div className="wp-starter-row" key={`${songKey(song)}-${i}`}>
@@ -614,7 +623,7 @@ export default function WeddingPlanner({ shared = false }) {
             <p className="wp-side-kicker">Open dance playlist</p>
             <h2>{plan.couple?.bride || 'Bride'} {plan.couple?.groom ? '& ' + plan.couple.groom : ''}</h2>
             {openDanceRows.length ? <ol>{openDanceRows.map(song => <li key={songKey(song)}><b>{song.title}</b><span>{song.artist}</span></li>)}</ol> : <p className="wp-side-note">No songs kept yet.</p>}
-            {spotifyUrl && <p className="wp-side-note">Couple’s starting playlist: <a href={spotifyUrl} target="_blank" rel="noreferrer">Open in Spotify</a></p>}
+            {hasSeparateOpenDancePlaylist && <p className="wp-side-note">Spotify Open Dance Playlist: <a href={openDanceSpotifyUrl} target="_blank" rel="noreferrer">Open in Spotify</a></p>}
           </section>
         </aside>
       </div>
