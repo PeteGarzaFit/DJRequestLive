@@ -229,7 +229,12 @@
   .wp-shell { max-width: none; }
   .wedding-no-print,.wp-sidebar,.wp-footer { display: none !important; }
   .wp-layout { display: block; }
-  .wp-form-column { display: block; }
+  .wp-form-column { display: flex; flex-direction: column; }
+  .wp-form-column > .wp-print-title { order: 0; }
+  .wp-form-column > section.wp-card { order: 3; }
+  .wp-form-column > section.wp-card:nth-of-type(2) { order: 1; }
+  .wp-form-column > section.wp-card:nth-of-type(1) { order: 2; }
+  .wp-form-column > section.wp-card:nth-of-type(9),.wp-form-column > section.wp-open-dance { display: none !important; }
   .wp-card { break-inside: auto; box-shadow: none; border: 1px solid #d1d5d8; padding: 9px; margin-bottom: 6px; }
   .wp-card > * { orphans: 2; widows: 2; }
   .wp-section-head,.wp-contact-row,.wp-time-row,.wp-table-row,.wp-song-row,.wp-style-row,.wp-behavior-row { break-inside: avoid; }
