@@ -411,9 +411,6 @@ export default function WeddingPlanner({ shared = false }) {
       if (response.playlist?.url) {
         editPlan(p => ({ ...p, openDance: { ...(p.openDance || {}), spotifyPlaylistUrl: response.playlist.url } }));
       }
-      if (response.playlist?.url) {
-        editPlan(p => ({ ...p, openDance: { ...(p.openDance || {}), spotifyPlaylistUrl: response.playlist.url } }));
-      }
       return true;
     } catch (error) {
       setSpotifyError(error.code === 'spotify_not_configured'
