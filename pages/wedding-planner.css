@@ -123,6 +123,10 @@
 .wp-button-light:hover:not(:disabled) { border-color: #98a2b3; background: #f8fafc; }
 .wp-button-quiet { background: transparent; color: var(--wp-muted); }
 .wp-spotify-button { display: inline-flex; align-items: center; margin-bottom: 12px; text-decoration: none; }
+.wp-spotify-tools { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; margin: 8px 0 12px; }
+.wp-spotify-visibility { display: grid; gap: 5px; color: var(--wp-muted); font-size: 11px; }
+.wp-spotify-visibility .wp-input { min-width: 160px; }
+.wp-spotify-feedback { flex-basis: 100%; margin: 0; color: var(--wp-muted); font-size: 12px; }
 .wp-check + .wp-check { margin-top: 4px; }
 .wp-style-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 22px; }
 .wp-style-row,.wp-behavior-row { display: grid; grid-template-columns: minmax(100px,1fr) auto; align-items: center; gap: 8px; border-top: 1px solid #e6e9eb; padding: 7px 0; font-size: 11px; }
