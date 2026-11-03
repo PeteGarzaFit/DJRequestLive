@@ -185,6 +185,11 @@ export default function WeddingPlanner({ shared = false }) {
   const [newListSong, setNewListSong] = useState({ mustPlay: { title: '', artist: '' }, doNotPlay: { title: '', artist: '' } });
   const [suggestion, setSuggestion] = useState({ section: 'Open dance', text: '' });
   const [printMode, setPrintMode] = useState('');
+  const [spotifyStatus, setSpotifyStatus] = useState(null);
+  const [spotifyVisibility, setSpotifyVisibility] = useState('private');
+  const [spotifyBusy, setSpotifyBusy] = useState(false);
+  const [spotifyResult, setSpotifyResult] = useState(null);
+  const [spotifyError, setSpotifyError] = useState('');
   const revision = useRef(0);
 
   const loadOwner = useCallback(async () => {
@@ -226,6 +231,15 @@ export default function WeddingPlanner({ shared = false }) {
       }).catch(() => { setStatus('This wedding link is no longer available. Ask the DJ for a new link.'); setReady(true); });
     } else loadOwner();
   }, [shared, token, loadOwner]);
+
+  useEffect(() => {
+    if (shared) return undefined;
+    let active = true;
+    api.spotifyStatus()
+      .then(value => { if (active) setSpotifyStatus(value); })
+      .catch(error => { if (active) setSpotifyStatus({ connected: false, error: error.code }); });
+    return () => { active = false; };
+  }, [shared]);
 
   useEffect(() => {
     if (!ready || !dirty || (!shared && !planId)) return undefined;
@@ -379,6 +393,38 @@ export default function WeddingPlanner({ shared = false }) {
     URL.revokeObjectURL(url);
   }
 
+  async function createOpenDanceSpotifyPlaylist() {
+    if (!openDanceRows.length || spotifyBusy) return false;
+    setSpotifyBusy(true);
+    setSpotifyError('');
+    setSpotifyResult(null);
+    const couple = [plan.couple?.bride, plan.couple?.groom].filter(nonempty).join(' & ');
+    const name = `${couple ? `${couple} - ` : ''}Open Dance Playlist`.slice(0, 100);
+    try {
+      const response = await api.spotifyCreatePlaylist({
+        name,
+        description: `Open dance selections from ${couple || 'a wedding'} · Created with DJ Request Live`,
+        visibility: spotifyVisibility,
+        songs: openDanceRows.map(({ title, artist }) => ({ title, artist })),
+      });
+      setSpotifyResult(response.playlist);
+      if (response.playlist?.url) {
+        editPlan(p => ({ ...p, openDance: { ...(p.openDance || {}), spotifyPlaylistUrl: response.playlist.url } }));
+      }
+      if (response.playlist?.url) {
+        editPlan(p => ({ ...p, openDance: { ...(p.openDance || {}), spotifyPlaylistUrl: response.playlist.url } }));
+      }
+      return true;
+    } catch (error) {
+      setSpotifyError(error.code === 'spotify_not_configured'
+        ? 'Spotify is not configured on the DJ Request Live server yet.'
+        : error.code === 'spotify_api_error' ? 'Spotify could not create the playlist. Try again.'
+        : error.code === 'spotify_reconnect_required' ? 'Reconnect Spotify and try again.'
+        : 'Could not create the Spotify playlist.');
+      return false;
+    } finally { setSpotifyBusy(false); }
+  }
+
   if (!ready) return <main className="wedding-app"><div className="wp-loading">{status}</div></main>;
   if (!shareToken && !shared) return <main className="wedding-app"><div className="wp-loading">Preparing your wedding workspace…</div></main>;
 
@@ -522,7 +568,16 @@ export default function WeddingPlanner({ shared = false }) {
 
           <section className="wp-card wp-open-dance">
             <div className="wp-section-head"><span className="wp-section-index">J</span><div><h2>Open dance: start with 40 SI DJ picks</h2><p>A useful mix from DJ Request Live’s highest dance-floor, sing-along, and cross-generation scores. Keep the songs that fit, cross off the rest, then add family favorites.</p></div></div>
-            {spotifyUrl && <a className="wp-button wp-button-light wp-spotify-button wedding-no-print" href={spotifyUrl} target="_blank" rel="noreferrer">Open starting playlist in Spotify</a>}
+            {!shared && <div className="wp-spotify-tools wedding-no-print">
+              {spotifyStatus === null ? <span className="wp-help">Checking Spotify connection…</span> : spotifyStatus.connected ? <>
+                <label className="wp-spotify-visibility"><span>New playlist visibility</span><select className="wp-input" value={spotifyVisibility} onChange={e => setSpotifyVisibility(e.target.value)}><option value="private">Private</option><option value="public">Public</option><option value="collaborative">Collaborative</option></select></label>
+                <button type="button" className="wp-button wp-button-dark" disabled={spotifyBusy || !openDanceRows.length} onClick={createOpenDanceSpotifyPlaylist}>{spotifyBusy ? 'Creating Spotify playlist…' : 'Create Open Dance Playlist'}</button>
+              </> : spotifyStatus.error === 'spotify_not_configured' ? <span className="wp-inline-error">Spotify is not configured on the DJ Request Live server.</span> : <a className="wp-button wp-button-light wp-spotify-button" href={api.spotifyConnectUrl}>Connect Spotify to create your playlist</a>}
+              {spotifyResult && <p className="wp-spotify-feedback" role="status"><b>{spotifyResult.added} songs added to {spotifyResult.name}.</b>{spotifyResult.missing?.length ? ` ${spotifyResult.missing.length} song${spotifyResult.missing.length === 1 ? '' : 's'} could not be matched.` : ' Every song matched.'}</p>}
+              {plan.openDance?.spotifyPlaylistUrl && <p className="wp-spotify-feedback">Open Dance Playlist: <a href={plan.openDance.spotifyPlaylistUrl} target="_blank" rel="noreferrer">Open in Spotify</a></p>}
+              {spotifyError && <p className="wp-inline-error" role="alert">{spotifyError}</p>}
+            </div>}
+            {spotifyUrl && <a className="wp-button wp-button-light wp-spotify-button wedding-no-print" href={spotifyUrl} target="_blank" rel="noreferrer">Open couple’s starting playlist</a>}
             <div className="wp-starter-tools wedding-no-print"><span><b>{(plan.openDance?.starters || []).filter(s => s.selected && !s.removed && !doNotPlayKeys.has(songKey(s))).length}</b> of 40 starters kept</span><div><ActionButton type="button" className="wp-button wp-button-light" onClick={suggestStarterMix}>Suggest 12 for this couple</ActionButton><ActionButton type="button" className="wp-button wp-button-light" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, none: false, starters: p.openDance.starters.map(s => ({ ...s, selected: !s.removed && !doNotPlayKeys.has(songKey(s)) })) } }))}>Keep all 40</ActionButton><ActionButton type="button" className="wp-button wp-button-quiet" onClick={() => editPlan(p => ({ ...p, openDance: { ...p.openDance, starters: weddingStarters() } }))}>Restore 40</ActionButton></div></div>
             {notice && <p className="wp-help wedding-no-print">{notice}</p>}
             <div className="wp-starter-list">{(plan.openDance?.starters || []).map((song, originalIndex) => ({ song, originalIndex })).filter(({ song }) => !song.removed).map(({ song, originalIndex: i }) => <div className="wp-starter-row" key={`${songKey(song)}-${i}`}>
@@ -562,7 +617,7 @@ export default function WeddingPlanner({ shared = false }) {
             <p className="wp-side-kicker">Open dance playlist</p>
             <h2>{plan.couple?.bride || 'Bride'} {plan.couple?.groom ? '& ' + plan.couple.groom : ''}</h2>
             {openDanceRows.length ? <ol>{openDanceRows.map(song => <li key={songKey(song)}><b>{song.title}</b><span>{song.artist}</span></li>)}</ol> : <p className="wp-side-note">No songs kept yet.</p>}
-            {spotifyUrl && <p className="wp-side-note">Spotify starting playlist: <a href={spotifyUrl} target="_blank" rel="noreferrer">Open in Spotify</a></p>}
+            {spotifyUrl && <p className="wp-side-note">Couple’s starting playlist: <a href={spotifyUrl} target="_blank" rel="noreferrer">Open in Spotify</a></p>}
           </section>
         </aside>
       </div>
