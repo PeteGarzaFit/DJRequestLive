@@ -25,6 +25,8 @@ const BRIDAL_ENTRIES = [
   ['Ring Bearer and Flower Girl', 'Ring Bearer and Flower Girl'],
 ];
 const SPECIAL_EVENTS = [
+  "Bride's family processional", "Groom's family processional",
+  "Bride's processional", "Groom's processional", 'Recessional',
   'Bride and Groom grand entrance', 'Bridal party announcements', 'Bride and Groom first dance',
   'Bride dances with her father', 'Groom dances with his mother',
 ];
@@ -76,6 +78,17 @@ function blankPlan() {
     collaboratorName: '',
     notes: '',
   };
+}
+
+function mergePlan(saved = {}) {
+  const plan = { ...blankPlan(), ...saved };
+  const songs = Array.isArray(saved.specialSongs) ? saved.specialSongs : [];
+  const existing = new Set(songs.map(song => song.event));
+  plan.specialSongs = [
+    ...songs,
+    ...SPECIAL_EVENTS.filter(event => !existing.has(event)).map(event => ({ event, title: '', artist: '', notApplicable: false })),
+  ];
+  return plan;
 }
 
 const clone = x => JSON.parse(JSON.stringify(x));
@@ -185,13 +198,13 @@ export default function WeddingPlanner({ shared = false }) {
         const saved = result.plans.find(item => String(item.id) === String(requestedId)) || result.plans[0];
         setPlanId(saved.id);
         setShareToken(saved.share_token);
-        setPlan({ ...blankPlan(), ...(saved.plan || {}) });
+        setPlan(mergePlan(saved.plan || {}));
         setStatus('Saved');
       } else {
         const created = await api.createWeddingPlan(blankPlan());
         setPlanId(created.id);
         setShareToken(created.share_token);
-        setPlan({ ...blankPlan(), ...(created.plan || {}) });
+        setPlan(mergePlan(created.plan || {}));
         setPlans([{ id: created.id, share_token: created.share_token, plan: created.plan, updated_at: created.updated_at }]);
         setStatus('Saved');
       }
@@ -206,7 +219,7 @@ export default function WeddingPlanner({ shared = false }) {
     if (shared) {
       setReady(false);
       api.weddingShare(token).then(result => {
-        setPlan({ ...blankPlan(), ...(result.plan || {}) });
+        setPlan(mergePlan(result.plan || {}));
         setShareToken(token);
         setStatus('Shared plan');
         setReady(true);
@@ -288,7 +301,7 @@ export default function WeddingPlanner({ shared = false }) {
     try {
       setStatus('Creating a wedding plan…');
       const created = await api.createWeddingPlan(blankPlan());
-      setPlanId(created.id); setShareToken(created.share_token); setPlan(created.plan);
+      setPlanId(created.id); setShareToken(created.share_token); setPlan(mergePlan(created.plan || {}));
       setPlans(p => [{ id: created.id, share_token: created.share_token, plan: created.plan, updated_at: created.updated_at }, ...p]);
       setDirty(false); setReady(true); setStatus('Saved');
     } catch (e) { toast(e.code === 'not_signed_in' ? 'Sign in to create a wedding plan.' : 'Could not create a wedding plan.'); return false; }
@@ -299,7 +312,7 @@ export default function WeddingPlanner({ shared = false }) {
     setReady(false);
     try {
       const selected = await api.weddingPlan(id);
-      setPlanId(selected.id); setShareToken(selected.share_token); setPlan({ ...blankPlan(), ...(selected.plan || {}) });
+      setPlanId(selected.id); setShareToken(selected.share_token); setPlan(mergePlan(selected.plan || {}));
       setDirty(false); setStatus('Saved');
     } catch { setStatus('Could not open that wedding plan.'); }
     finally { setReady(true); }
@@ -467,7 +480,7 @@ export default function WeddingPlanner({ shared = false }) {
           </section>
 
           <section className="wp-card">
-            <div className="wp-section-head"><span className="wp-section-index">D</span><div><h2>Special event songs</h2><p>Give each formal moment its song and artist, or mark it not applicable.</p></div></div>
+            <div className="wp-section-head"><span className="wp-section-index">D</span><div><h2>Special event songs</h2><p>Choose songs for each processional group, the recessional, and reception moments. Mark any unused moment not applicable.</p></div></div>
             {(plan.specialSongs || []).map((item, i) => <div className="wp-song-row" key={item.event}>
               <b>{item.event}</b><input className="wp-input" value={item.title || ''} disabled={item.notApplicable} placeholder="Song title" onChange={e => patchArray('specialSongs', i, { title: e.target.value })} /><input className="wp-input" value={item.artist || ''} disabled={item.notApplicable} placeholder="Artist" onChange={e => patchArray('specialSongs', i, { artist: e.target.value })} /><CheckLine checked={item.notApplicable} onChange={v => patchArray('specialSongs', i, { notApplicable: v, title: '', artist: '' })}>N/A</CheckLine>
             </div>)}
