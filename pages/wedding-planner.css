@@ -108,6 +108,8 @@
 .wp-special-playlist { display: grid; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e6e9eb; }
 .wp-special-playlist h3,.wp-special-playlist p { margin: 0; }
 .wp-song-row { display: grid; grid-template-columns: minmax(180px,1.1fr) minmax(140px,1fr) minmax(130px,1fr) 82px; align-items: center; gap: 10px; border-top: 1px solid #e6e9eb; padding: 9px 0; font-size: 11px; }
+.wp-song-note { grid-column: 2 / -1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wp-song-note .wp-input { flex: 1 1 240px; }
 .wp-list-song { display: grid; grid-template-columns: 1.2fr 1fr 30px; align-items: center; gap: 10px; min-height: 38px; border-top: 1px solid #e6e9eb; font-size: 12px; }
 .wp-icon-button { width: 30px; height: 30px; background: transparent; border: 0; color: #8d584a; font-size: 20px; cursor: pointer; border-radius: 4px; }
 .wp-add-song { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin: 13px 0 8px; }
@@ -207,6 +209,7 @@
   .wp-formality-head { display: none; }
   .wp-song-row { grid-template-columns: 1fr 1fr; }
   .wp-song-row b { grid-column: 1 / -1; }
+  .wp-song-note { grid-column: 1 / -1; }
   .wp-add-song { grid-template-columns: 1fr 1fr; }
   .wp-add-song .wp-button { grid-column: 1 / -1; }
   .wp-style-row,.wp-behavior-row { grid-template-columns: 1fr; }
