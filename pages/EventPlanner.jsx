@@ -3,7 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, copyText } from '../lib/api.js';
 import { songRows } from '../lib/songLibrary.js';
 import { toast } from '../lib/toast.js';
+import EventSpotifyPlaylists from '../components/EventSpotifyPlaylists.jsx';
+import { normalizeSpecialDance } from '../lib/eventPlaylists.js';
+import EventTimelinePrint from '../components/EventTimelinePrint.jsx';
 import './wedding-planner.css';
+import './event-timeline-print.css';
 
 const MUSIC_STYLES = ['Country', 'Pop', 'Classic rock', '80s / 90s', 'Hip-hop', 'R&B', 'Disco / funk', 'Latin', 'Tejano', 'Cumbia', 'Bachata', 'Salsa / merengue', 'Reggae', 'Alternative', 'Electronic', 'Jazz', 'Oldies', 'Sing-alongs'];
 const MOMENTS = ['Guest arrival / welcome', 'Food service', 'Announcements or speeches', 'Featured activity', 'Open dance begins', 'Final song / wrap-up'];
@@ -236,12 +240,19 @@ export default function EventPlanner({ shared = false }) {
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'event-open-dance-playlist.txt'; anchor.click(); URL.revokeObjectURL(url); return true;
   }
   function removeListSong(section, index) { edit(previous => ({ ...previous, [section]: { ...previous[section], songs: previous[section].songs.filter((_, i) => i !== index) } })); }
+  function saveSpotifyPlaylist(kind, result) {
+    edit(previous => ({ ...previous, spotifyExports: { ...(previous.spotifyExports || {}), [kind]: result } }));
+  }
+  function updateSpecialDance(index, patch) {
+    edit(previous => ({ ...previous, specialDances: previous.specialDances.map((dance, i) => i === index ? { ...normalizeSpecialDance(dance), ...patch } : dance) }));
+  }
   function print(mode) { setPrintMode(mode); return true; }
 
   if (!ready) return <main className="wedding-app"><div className="wp-loading">{status}</div></main>;
   const spotifyHref = /^https:\/\/open\.spotify\.com\/playlist\/[A-Za-z0-9]+(?:\?.*)?$/i.test(plan.spotifyPlaylist || '') ? plan.spotifyPlaylist : '';
-  return <main className={`wedding-app ${printMode === 'playlist' ? 'print-playlist' : ''}`}>
+  return <main className={`wedding-app event-planner ${printMode === 'playlist' ? 'print-playlist' : ''}`}>
     <div className="wp-shell" id="event-print-area">
+      <EventTimelinePrint plan={plan} />
       <header className="wp-topbar wedding-no-print">
         <Link to={shared ? '/' : '/studio?tab=queue'} className="wp-wordmark">DJ Request Live <span>Events</span></Link>
         <span className="wp-save-status" role="status">{status}</span>
@@ -271,10 +282,12 @@ export default function EventPlanner({ shared = false }) {
             {(plan.eventType === 'Birthday or anniversary' || plan.eventType === 'Private party anniversary' || (plan.eventType === 'Private party' && /anniversary/i.test(plan.title || ''))) && <div className="wp-anniversary-dances">
               <h3 className="wp-subhead">Optional anniversary special dances</h3>
               <p className="wp-side-note">Add up to three dances with the song and artist. Leave any unused slots blank.</p>
-              {(plan.specialDances || []).map((dance, index) => <div className="wp-grid wp-grid-2" key={index}>
-                <Field label={`Special dance ${index + 1} song`} value={dance.title} onChange={value => edit(previous => ({ ...previous, specialDances: previous.specialDances.map((item, i) => i === index ? { ...item, title: value } : item) }))} placeholder="Song title" />
-                <Field label={`Special dance ${index + 1} artist`} value={dance.artist} onChange={value => edit(previous => ({ ...previous, specialDances: previous.specialDances.map((item, i) => i === index ? { ...item, artist: value } : item) }))} placeholder="Artist" />
-              </div>)}
+              {(plan.specialDances || []).map((savedDance, index) => { const dance = normalizeSpecialDance(savedDance); return <div className="wp-grid wp-grid-2" key={index}>
+                <Field label={`Special dance ${index + 1} participants`} value={dance.label} onChange={label => updateSpecialDance(index, { label })} placeholder="For example, Obby & Mimi" />
+                <Field label={`Special dance ${index + 1} song`} value={dance.title} onChange={title => updateSpecialDance(index, { title })} placeholder="Song title" />
+                <Field label={`Special dance ${index + 1} artist`} value={dance.artist} onChange={artist => updateSpecialDance(index, { artist })} placeholder="Artist" />
+              </div>; })}
+              {!shared && <EventSpotifyPlaylists key={`${planId}-special`} plan={plan} onSave={saveSpotifyPlaylist} kind="special" />}
             </div>}
           </section>
 
@@ -292,6 +305,7 @@ export default function EventPlanner({ shared = false }) {
             <div className="wp-add-custom wedding-no-print"><div className="wp-grid wp-grid-2"><Field label="Add another song" value={newSong.title} onChange={value => setNewSong(previous => ({ ...previous, title: value }))} placeholder="Song title" /><Field label="Artist" value={newSong.artist} onChange={value => setNewSong(previous => ({ ...previous, artist: value }))} placeholder="Artist name" /></div><ActionButton type="button" className="wp-button wp-button-dark" onClick={addCustomSong}>Add to playlist</ActionButton></div>
             <div className="wp-library-search wedding-no-print"><Field label="Find a song in the DJ Request Live song guide" value={query} onChange={setQuery} placeholder="Search title, artist, or style" />{matchingSongs.length > 0 && <div className="wp-search-results">{matchingSongs.map(song => <ActionButton type="button" key={songKey(song)} onClick={() => addDanceSong(song)}><span><b>{song.title}</b><small>{song.artist} · {song.genre}</small></span><strong>Add</strong></ActionButton>)}</div>}</div>
             {(plan.openDance?.custom || []).map((song, index) => <div className="wp-list-song" key={`${songKey(song)}-${index}`}><span>{song.title}</span><span>{song.artist}</span><ActionButton type="button" className="wp-icon-button wedding-no-print" aria-label={`Remove ${song.title}`} onClick={() => edit(previous => ({ ...previous, openDance: { ...previous.openDance, custom: previous.openDance.custom.filter((_, i) => i !== index) } }))}>×</ActionButton></div>)}
+            {!shared && <EventSpotifyPlaylists key={`${planId}-openDance`} plan={plan} onSave={saveSpotifyPlaylist} kind="openDance" />}
             <CheckLine checked={plan.openDance?.none} onChange={value => setField('openDance', 'none', value)}>No preset open-dance songs; let the DJ read the room</CheckLine>
           </section>
 
@@ -301,7 +315,7 @@ export default function EventPlanner({ shared = false }) {
             <Field label="Anything else the DJ or event team should know?" value={plan.notes} onChange={value => setField('notes', '', value)} multiline placeholder="Setup needs, access details, announcements, or other notes" />
           </section>
         </div>
-        <aside className="wp-sidebar wedding-no-print"><section className="wp-side-card"><p className="wp-side-kicker">Before you export</p><h2>{progress.percent === 100 ? 'Ready to take with you.' : 'A few details still need a reply.'}</h2><p className="wp-side-note">Completed items have an answer, a clear skip, or a song choice.</p><ul className="wp-missing">{progress.checks.filter(item => !item.ok).slice(0, 10).map(item => <li key={item.label}>{item.label}</li>)}</ul><ActionButton type="button" className="wp-button wp-button-dark wp-wide" onClick={() => print('sheet')}>Save event sheet as PDF</ActionButton><ActionButton type="button" className="wp-button wp-button-light wp-wide" disabled={!playlistRows.length} onClick={exportPlaylist}>Download playlist (.txt)</ActionButton><ActionButton type="button" className="wp-button wp-button-light wp-wide" disabled={!playlistRows.length} onClick={() => print('playlist')}>Save playlist as PDF</ActionButton><small>Choose “Save as PDF” in the print window.</small></section>
+        <aside className="wp-sidebar wedding-no-print"><section className="wp-side-card"><p className="wp-side-kicker">Before you export</p><h2>{progress.percent === 100 ? 'Ready to take with you.' : 'A few details still need a reply.'}</h2><p className="wp-side-note">Completed items have an answer, a clear skip, or a song choice.</p><ul className="wp-missing">{progress.checks.filter(item => !item.ok).slice(0, 10).map(item => <li key={item.label}>{item.label}</li>)}</ul><ActionButton type="button" className="wp-button wp-button-dark wp-wide" onClick={() => print('sheet')}>Save timeline as PDF</ActionButton><ActionButton type="button" className="wp-button wp-button-light wp-wide" disabled={!playlistRows.length} onClick={exportPlaylist}>Download playlist (.txt)</ActionButton><ActionButton type="button" className="wp-button wp-button-light wp-wide" disabled={!playlistRows.length} onClick={() => print('playlist')}>Save playlist as PDF</ActionButton><small>Choose “Save as PDF” in the print window.</small></section>
           <section className="wp-side-card wp-playlist-preview wedding-print-playlist"><p className="wp-side-kicker">Open dance playlist</p><h2>{plan.title || 'Event playlist'}</h2>{playlistRows.length ? <ol>{playlistRows.map((song, index) => <li key={`${songKey(song)}-${index}`}>{song.title}<span>{song.artist}</span></li>)}</ol> : <p className="wp-side-note">Keep songs in the open-dance section to build this playlist.</p>}</section></aside>
       </div>
       <footer className="wp-footer wedding-no-print">DJ Request Live · Event music planning</footer>

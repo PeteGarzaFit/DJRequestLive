@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { exactSpotifySong } from '../lib/spotifySongMatch.js';
 import { hashPassword, verifyPassword, fakeVerify, newToken, tokenHash, parseCookies, limited } from './security.js';
 import OpenAI from 'openai';
 import { AI_PLAN_SYSTEM } from '../lib/aiPlanner.js';
@@ -1277,10 +1278,10 @@ ${JSON.stringify(library)}`;
           const title = str(song?.title ?? '', 180, { min: 1 });
           const artist = str(song?.artist ?? '', 180, { min: 1 });
           const q = encodeURIComponent('track:' + title + ' artist:' + artist);
-          const r = await fetch('https://api.spotify.com/v1/search?type=track&limit=1&q=' + q, { headers: { Authorization: 'Bearer ' + access } });
+          const r = await fetch('https://api.spotify.com/v1/search?type=track&limit=' + (b.strictMatch ? 5 : 1) + '&q=' + q, { headers: { Authorization: 'Bearer ' + access } });
           const data = await r.json().catch(() => ({}));
           if (!r.ok) throw bad('spotify_api_error', 502);
-          const track = data.tracks?.items?.[0];
+          const track = b.strictMatch ? exactSpotifySong({ title, artist }, data.tracks?.items || []) : data.tracks?.items?.[0];
           if (track?.uri) uris.push(track.uri); else missing.push({ title, artist });
         }
         const cr = await fetch('https://api.spotify.com/v1/me/playlists', {
